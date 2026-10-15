@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+   
+    "paths": {
+      "@/*": ["./*"]
+    },
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "preserve",
+    "checkJs": false
+  },
+  "include": [
+    "app/**/*.js",
+    "app/**/*.jsx",
+    "components/**/*.js",
+    "components/**/*.jsx",
+    "lib/**/*.js",
+    "services/**/*.js",
+    "validators/**/*.js",
+    "utils/**/*.js",
+    "hooks/**/*.js",
+    "prisma/**/*.js",
+    "tests/**/*.js",
+    "middleware.js"
+  ],
+  "exclude": ["node_modules", ".next"]
+}

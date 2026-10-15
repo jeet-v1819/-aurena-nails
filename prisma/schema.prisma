@@ -1,0 +1,343 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["aurena"]
+}
+
+enum Role {
+  ADMIN
+  CUSTOMER
+
+  @@schema("aurena")
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  REJECTED
+
+  @@schema("aurena")
+}
+
+model User {
+  id                  String               @id @default(cuid())
+  authId              String               @unique
+  email               String               @unique
+  firstName           String
+  lastName            String               @default("")
+  mobile              String?              @unique
+  image               String?
+  role                Role                 @default(CUSTOMER)
+  active              Boolean              @default(true)
+  deletedAt           DateTime?
+  lastLoginAt         DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  appointments        Appointment[]
+  notifications       Notification[]
+  reviews             Review[]
+  wishlists           Wishlist[]
+  passwordResetTokens PasswordResetToken[]
+
+  @@index([role, active, createdAt])
+  @@schema("aurena")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@schema("aurena")
+}
+
+model GalleryCategory {
+  id            String         @id @default(cuid())
+  name          String
+  slug          String         @unique
+  description   String         @default("")
+  image         String?
+  active        Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  galleryImages GalleryImage[]
+  services      Service[]
+  videos        Video[]
+
+  @@schema("aurena")
+}
+
+model Service {
+  id               String           @id @default(cuid())
+  name             String
+  slug             String           @unique
+  shortDescription String
+  description      String
+  categoryId       String?
+  mainImage        String?
+  duration         Int
+  startingPrice    Decimal          @db.Decimal(10, 2)
+  regularPrice     Decimal?         @db.Decimal(10, 2)
+  promotionalPrice Decimal?         @db.Decimal(10, 2)
+  nailType         String           @default("")
+  style            String           @default("")
+  occasion         String           @default("")
+  difficulty       String           @default("")
+  preparation      String           @default("")
+  aftercare        String           @default("")
+  available        Boolean          @default(true)
+  featured         Boolean          @default(false)
+  active           Boolean          @default(true)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  category         GalleryCategory? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  images           ServiceImage[]
+  videos           ServiceVideo[]
+  appointments     Appointment[]
+  reviews          Review[]
+  wishlists        Wishlist[]
+
+  @@index([active, featured, categoryId])
+  @@schema("aurena")
+}
+
+model ServiceImage {
+  id        String   @id @default(cuid())
+  serviceId String
+  url       String
+  publicId  String?  @unique
+  alt       String   @default("")
+  position  Int      @default(0)
+  metadata  Json?
+  createdAt DateTime @default(now())
+  service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([serviceId, position])
+  @@schema("aurena")
+}
+
+model ServiceVideo {
+  serviceId String
+  videoId   String
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  video     Video   @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@id([serviceId, videoId])
+  @@schema("aurena")
+}
+
+model GalleryImage {
+  id          String           @id @default(cuid())
+  title       String
+  description String           @default("")
+  url         String
+  publicId    String?          @unique
+  categoryId  String?
+  tags        String[]         @default([])
+  style       String           @default("")
+  occasion    String           @default("")
+  featured    Boolean          @default(false)
+  active      Boolean          @default(true)
+  position    Int              @default(0)
+  metadata    Json?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  category    GalleryCategory? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  wishlists   Wishlist[]
+
+  @@index([active, categoryId, createdAt])
+  @@schema("aurena")
+}
+
+model Video {
+  id          String           @id @default(cuid())
+  title       String
+  description String           @default("")
+  url         String
+  publicId    String?          @unique
+  thumbnail   String?
+  categoryId  String?
+  tags        String[]         @default([])
+  featured    Boolean          @default(false)
+  active      Boolean          @default(true)
+  metadata    Json?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  category    GalleryCategory? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  services    ServiceVideo[]
+
+  @@index([active, categoryId, createdAt])
+  @@schema("aurena")
+}
+
+model Appointment {
+  id          String            @id @default(cuid())
+  userId      String
+  serviceId   String
+  serviceName String
+  start       DateTime          @db.Timestamptz(3)
+  end         DateTime          @db.Timestamptz(3)
+  status      AppointmentStatus @default(PENDING)
+  note        String            @default("")
+  requestKey  String            @unique @default(cuid())
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  service     Service           @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  user        User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  review      Review?
+
+  @@index([status, start, end])
+  @@index([userId, start])
+  @@schema("aurena")
+}
+
+model Wishlist {
+  id           String        @id @default(cuid())
+  userId       String
+  serviceId    String?
+  galleryId    String?
+  createdAt    DateTime      @default(now())
+  galleryImage GalleryImage? @relation(fields: [galleryId], references: [id], onDelete: Cascade)
+  service      Service?      @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, galleryId])
+  @@unique([userId, serviceId])
+  @@schema("aurena")
+}
+
+model Review {
+  id            String      @id @default(cuid())
+  appointmentId String      @unique
+  userId        String
+  serviceId     String
+  rating        Int
+  comment       String
+  visible       Boolean     @default(true)
+  moderatedBy   String?
+  moderatedAt   DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  service       Service     @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([serviceId, visible])
+  @@schema("aurena")
+}
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  mobile    String
+  subject   String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([read, createdAt])
+  @@schema("aurena")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  eventKey  String   @unique
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read, createdAt])
+  @@schema("aurena")
+}
+
+model WebsiteContent {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@schema("aurena")
+}
+
+model BusinessHours {
+  weekday   Int      @id
+  open      String
+  close     String
+  closed    Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+
+  @@schema("aurena")
+}
+
+model Holiday {
+  id          String   @id @default(cuid())
+  name        String
+  date        String   @unique
+  description String   @default("")
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@schema("aurena")
+}
+
+model MediaAsset {
+  id           String   @id @default(cuid())
+  publicId     String   @unique
+  url          String
+  resourceType String
+  filename     String
+  mime         String
+  bytes        Int
+  width        Int?
+  height       Int?
+  duration     Float?
+  ownerId      String
+  createdAt    DateTime @default(now())
+
+  @@index([ownerId])
+  @@schema("aurena")
+}
+
+model MediaDeletion {
+  id           String   @id @default(cuid())
+  publicId     String   @unique
+  resourceType String
+  createdAt    DateTime @default(now())
+
+  @@schema("aurena")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String
+  action    String
+  targetId  String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@schema("aurena")
+}
+
+model RateLimit {
+  key       String   @id
+  count     Int      @default(1)
+  expiresAt DateTime
+
+  @@schema("aurena")
+}

@@ -1,0 +1,45 @@
+{
+  "name": "aurena-nails",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AURENA NAILS — Luxury Nail Art & Beauty Experience",
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "node prisma/seed.js",
+    "test:e2e": "playwright test"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^3.9.1",
+    "@neondatabase/auth": "^0.6.0-beta",
+    "@prisma/client": "5.22.0",
+    "cloudinary": "^2.5.1",
+    "dotenv": "^16.4.7",
+    "framer-motion": "^11.15.0",
+    "lucide-react": "^0.468.0",
+    "next": "14.2.25",
+    "nodemailer": "^6.9.16",
+    "pg": "^8.13.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-hook-form": "^7.54.2",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "14.2.25",
+    "postcss": "^8.4.49",
+    "prisma": "5.22.0",
+    "tailwindcss": "^3.4.17"
+  }
+}
