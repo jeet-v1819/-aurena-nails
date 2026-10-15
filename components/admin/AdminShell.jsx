@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Calendar,
   CalendarOff,
@@ -44,11 +44,32 @@ const ADMIN_NAV_ITEMS = [
 
 export default function AdminShell({ adminUser, children }) {
   const pathname = usePathname();
-  const { logout } = useAuth();
+  const router = useRouter();
+  const { user, loading, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  if (pathname === "/admin/login") {
+  const activeUser = user || adminUser;
+  const isLoginRoute = pathname === "/admin/login";
+
+  useEffect(() => {
+    if (isLoginRoute) return;
+    if (!loading && !activeUser) {
+      router.replace(`/admin/login?redirect=${encodeURIComponent(pathname)}`);
+    }
+  }, [isLoginRoute, loading, activeUser, pathname, router]);
+
+  if (isLoginRoute) {
     return <>{children}</>;
+  }
+
+  if (!activeUser) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-aurena-cream text-aurena-charcoal">
+        <p className="text-sm text-aurena-muted">
+          Verifying administrator session...
+        </p>
+      </div>
+    );
   }
 
   return (

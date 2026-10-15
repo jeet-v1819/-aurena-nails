@@ -5,6 +5,7 @@ import { AlertTriangle, X } from "lucide-react";
 
 export default function ConfirmModal({
   isOpen,
+  open,
   title = "Confirm Action",
   message = "Are you sure you want to proceed?",
   confirmLabel = "Confirm",
@@ -14,8 +15,9 @@ export default function ConfirmModal({
   onConfirm,
   onCancel
 }) {
+  const modalOpen = isOpen ?? open;
   useEffect(() => {
-    if (!isOpen) return;
+    if (!modalOpen) return;
     function onKeyDown(e) {
       if (e.key === "Escape" && !loading) {
         onCancel?.();
@@ -23,9 +25,9 @@ export default function ConfirmModal({
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isOpen, loading, onCancel]);
+  }, [modalOpen, loading, onCancel]);
 
-  if (!isOpen) return null;
+  if (!modalOpen) return null;
 
   return (
     <div

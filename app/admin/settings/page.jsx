@@ -24,8 +24,10 @@ export default function AdminSettingsPage() {
       setLastName(user.lastName || "");
       setEmail(user.email || "");
       setMobile(user.mobile || "");
+    } else {
+      refreshSession();
     }
-  }, [user]);
+  }, [user, refreshSession]);
 
   async function handleSaveAdminProfile(e) {
     e.preventDefault();
@@ -59,6 +61,7 @@ export default function AdminSettingsPage() {
         body: JSON.stringify({
           currentPassword,
           newPassword,
+          confirmPassword: confirmNewPassword,
           confirmNewPassword
         })
       });

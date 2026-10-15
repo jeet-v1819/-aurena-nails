@@ -1,13 +1,15 @@
 import crypto from "crypto";
 import nodemailer from "nodemailer";
-import { hashPassword } from "@better-auth/utils/password";
+import { hashPassword, verifyPassword } from "@better-auth/utils/password";
 import { prisma } from "@/lib/prisma";
 import {
   AppError,
   checkRateLimit,
   clearAuthSessionCookies,
   getNeonAuthServer,
-  sanitizeUser
+  getRawSessionTokenFromCookies,
+  sanitizeUser,
+  setAuthSessionCookies
 } from "@/lib/auth";
 import { getServerEnv, isEmailConfigured } from "@/lib/env";
 import {
@@ -73,7 +75,10 @@ export async function registerCustomer(rawInput, ipKey = "anon") {
 
   if (signUpError || !signUpData?.user?.id) {
     const errMsg = String(signUpError?.message || "");
-    if (errMsg.toLowerCase().includes("already exists") || signUpError?.status === 422) {
+    if (
+      errMsg.toLowerCase().includes("already exists") ||
+      signUpError?.status === 422
+    ) {
       throw new AppError(
         "An account with this email address already exists.",
         409,
@@ -81,10 +86,27 @@ export async function registerCustomer(rawInput, ipKey = "anon") {
       );
     }
     throw new AppError(
-      signUpError?.message || "Unable to complete registration. Please try again.",
+      signUpError?.message ||
+        "Unable to complete registration. Please try again.",
       400,
       "REGISTRATION_FAILED"
     );
+  }
+
+  if (signUpData.token) {
+    await setAuthSessionCookies(signUpData.token);
+  }
+
+  const existingToken = await getRawSessionTokenFromCookies();
+  if (!existingToken) {
+    const { data: signInData } = await auth.signIn.email({
+      email: data.email,
+      password: data.password,
+      rememberMe: true
+    });
+    if (signInData?.token) {
+      await setAuthSessionCookies(signInData.token);
+    }
   }
 
   const createdUser = await prisma.$transaction(async (tx) => {
@@ -159,7 +181,9 @@ export async function loginUser(
         "INVALID_IDENTIFIER"
       );
     }
-    preloadedUser = await prisma.user.findUnique({ where: { email: targetEmail } });
+    preloadedUser = await prisma.user.findUnique({
+      where: { email: targetEmail }
+    });
   }
 
   if (preloadedUser && preloadedUser.deletedAt) {
@@ -191,6 +215,13 @@ export async function loginUser(
       "Invalid email/mobile number or password.",
       401,
       "INVALID_CREDENTIALS"
+    );
+  }
+
+  if (signInData.token) {
+    await setAuthSessionCookies(
+      signInData.token,
+      parsed.rememberMe ? 60 * 60 * 24 * 7 : 60 * 60 * 24
     );
   }
 
@@ -251,8 +282,15 @@ export async function loginUser(
 }
 
 export async function logoutUser() {
+  const rawToken = await getRawSessionTokenFromCookies();
   const auth = getNeonAuthServer();
   await auth.signOut({}).catch(() => {});
+  if (rawToken) {
+    await prisma.$executeRaw`
+      DELETE FROM "neon_auth"."session"
+      WHERE "token" = ${rawToken}
+    `.catch(() => {});
+  }
   await clearAuthSessionCookies();
   return { success: true };
 }
@@ -360,7 +398,11 @@ export async function resetPasswordWithToken(rawInput, ipKey = "anon") {
       );
     }
 
-    if (!resetRecord.user || !resetRecord.user.active || resetRecord.user.deletedAt) {
+    if (
+      !resetRecord.user ||
+      !resetRecord.user.active ||
+      resetRecord.user.deletedAt
+    ) {
       throw new AppError(
         "Unable to reset password for this account.",
         403,
@@ -400,7 +442,8 @@ export async function resetPasswordWithToken(rawInput, ipKey = "anon") {
 
     return {
       success: true,
-      message: "Your password has been reset successfully. You may now sign in."
+      message:
+        "Your password has been reset successfully. You may now sign in."
     };
   }
 
@@ -426,7 +469,13 @@ export async function resetPasswordWithToken(rawInput, ipKey = "anon") {
 }
 
 export async function changeCustomerPassword(user, rawInput) {
-  const data = changePasswordSchema.parse(rawInput);
+  const normalizedInput = {
+    currentPassword: rawInput?.currentPassword || "",
+    newPassword: rawInput?.newPassword || "",
+    confirmPassword:
+      rawInput?.confirmPassword || rawInput?.confirmNewPassword || ""
+  };
+  const data = changePasswordSchema.parse(normalizedInput);
   const auth = getNeonAuthServer();
 
   const { error } = await auth.changePassword({
@@ -436,11 +485,43 @@ export async function changeCustomerPassword(user, rawInput) {
   });
 
   if (error) {
-    throw new AppError(
-      error.message || "Current password is incorrect.",
-      400,
-      "PASSWORD_CHANGE_FAILED"
-    );
+    const accounts = await prisma.$queryRaw`
+      SELECT "id", "password"
+      FROM "neon_auth"."account"
+      WHERE "userId" = ${user.authId}::uuid
+        AND "providerId" = 'credential'
+      LIMIT 1
+    `;
+    const account = accounts?.[0];
+    if (!account?.password) {
+      throw new AppError(
+        error.message || "Current password is incorrect.",
+        400,
+        "PASSWORD_CHANGE_FAILED"
+      );
+    }
+
+    const valid =
+      verifyPassword.length >= 2
+        ? await verifyPassword(account.password, data.currentPassword)
+        : await verifyPassword({
+            hash: account.password,
+            password: data.currentPassword
+          });
+    if (!valid) {
+      throw new AppError(
+        "Current password is incorrect.",
+        400,
+        "PASSWORD_CHANGE_FAILED"
+      );
+    }
+
+    const newHash = await hashPassword(data.newPassword);
+    await prisma.$executeRaw`
+      UPDATE "neon_auth"."account"
+      SET "password" = ${newHash}, "updatedAt" = NOW()
+      WHERE "id" = ${account.id}::uuid
+    `;
   }
 
   await createNotificationOnce({
@@ -452,6 +533,6 @@ export async function changeCustomerPassword(user, rawInput) {
 
   return {
     success: true,
-    message: "Password updated successfully."
+    message: "Your password has been updated successfully."
   };
 }

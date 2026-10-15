@@ -5,6 +5,7 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState
 } from "react";
 import { useRouter } from "next/navigation";
@@ -13,12 +14,13 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ initialUser = null, children }) {
   const router = useRouter();
-  const [user, setUser] = useState(initialUser);
-  const [loading, setLoading] = useState(false);
+  const [user, setUserState] = useState(initialUser);
+  const [loading, setLoading] = useState(!initialUser);
   const [inactiveMessage, setInactiveMessage] = useState("");
   const [wishlistItems, setWishlistItems] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [toast, setToast] = useState(null);
+  const didInitialCheck = useRef(false);
 
   const showToast = useCallback((message, type = "success") => {
     setToast({ id: Date.now(), message, type });
@@ -31,15 +33,21 @@ export function AuthProvider({ initialUser = null, children }) {
   }, [toast]);
 
   const refreshUserExtras = useCallback(async (activeUser) => {
-    if (!activeUser) {
+    if (!activeUser || activeUser.role === "ADMIN") {
       setWishlistItems([]);
       setUnreadCount(0);
       return;
     }
     try {
       const [wishRes, notifRes] = await Promise.all([
-        fetch("/api/wishlist", { cache: "no-store" }),
-        fetch("/api/notifications?limit=5", { cache: "no-store" })
+        fetch("/api/wishlist", {
+          credentials: "include",
+          cache: "no-store"
+        }),
+        fetch("/api/notifications?limit=5", {
+          credentials: "include",
+          cache: "no-store"
+        })
       ]);
       if (wishRes.ok) {
         const wData = await wishRes.json();
@@ -54,13 +62,25 @@ export function AuthProvider({ initialUser = null, children }) {
     }
   }, []);
 
+  const setUser = useCallback(
+    (nextUser) => {
+      setUserState(nextUser);
+      setLoading(false);
+      refreshUserExtras(nextUser);
+    },
+    [refreshUserExtras]
+  );
+
   const refreshSession = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/session", { cache: "no-store" });
+      const res = await fetch("/api/auth/session", {
+        credentials: "include",
+        cache: "no-store"
+      });
       const data = await res.json();
       if (res.status === 403 && data?.inactive) {
-        setUser(null);
+        setUserState(null);
         setInactiveMessage(
           data.error ||
             "Your account is currently inactive. Please contact Aurena Nails."
@@ -71,7 +91,7 @@ export function AuthProvider({ initialUser = null, children }) {
       }
       setInactiveMessage("");
       const nextUser = data?.user || null;
-      setUser(nextUser);
+      setUserState(nextUser);
       await refreshUserExtras(nextUser);
       return nextUser;
     } catch {
@@ -82,17 +102,26 @@ export function AuthProvider({ initialUser = null, children }) {
   }, [refreshUserExtras]);
 
   useEffect(() => {
-    setUser(initialUser);
     if (initialUser) {
+      setUserState(initialUser);
+      setLoading(false);
       refreshUserExtras(initialUser);
+      didInitialCheck.current = true;
+    } else if (!didInitialCheck.current) {
+      didInitialCheck.current = true;
+      refreshSession();
     }
-  }, [initialUser, refreshUserExtras]);
+  }, [initialUser, refreshUserExtras, refreshSession]);
 
   const logout = useCallback(async () => {
     setLoading(true);
     try {
-      await fetch("/api/auth/logout", { method: "POST" });
-      setUser(null);
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store"
+      });
+      setUserState(null);
       setWishlistItems([]);
       setUnreadCount(0);
       showToast("You have been signed out.", "info");
@@ -116,7 +145,10 @@ export function AuthProvider({ initialUser = null, children }) {
   const toggleWishlist = useCallback(
     async ({ serviceId, galleryId }) => {
       if (!user) {
-        showToast("Please sign in to save favourites to your wishlist.", "error");
+        showToast(
+          "Please sign in to save favourites to your wishlist.",
+          "error"
+        );
         router.push("/login");
         return false;
       }
@@ -126,9 +158,13 @@ export function AuthProvider({ initialUser = null, children }) {
       );
 
       if (existing) {
-        const res = await fetch(`/api/wishlist?id=${encodeURIComponent(existing.id)}`, {
-          method: "DELETE"
-        });
+        const res = await fetch(
+          `/api/wishlist?id=${encodeURIComponent(existing.id)}`,
+          {
+            method: "DELETE",
+            credentials: "include"
+          }
+        );
         if (res.ok) {
           setWishlistItems((prev) => prev.filter((i) => i.id !== existing.id));
           showToast("Removed from your wishlist.", "info");
@@ -138,6 +174,7 @@ export function AuthProvider({ initialUser = null, children }) {
         const res = await fetch("/api/wishlist", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({ serviceId, galleryId })
         });
         if (res.ok) {
@@ -184,8 +221,8 @@ export function AuthProvider({ initialUser = null, children }) {
             toast.type === "error"
               ? "bg-red-950 text-white border-red-800"
               : toast.type === "info"
-              ? "bg-aurena-charcoal text-white border-aurena-charcoal"
-              : "bg-aurena-charcoal text-aurena-cream border-aurena-rosegold"
+                ? "bg-aurena-charcoal text-white border-aurena-charcoal"
+                : "bg-aurena-charcoal text-aurena-cream border-aurena-rosegold"
           }`}
         >
           <span>{toast.message}</span>

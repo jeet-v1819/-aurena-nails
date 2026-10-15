@@ -2,6 +2,13 @@
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  experimental: {
+    serverComponentsExternalPackages: [
+      "@prisma/client",
+      "@prisma/adapter-pg",
+      "pg"
+    ]
+  },
   images: {
     remotePatterns: [
       {
