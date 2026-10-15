@@ -9,9 +9,12 @@ import {
   Heart,
   LogOut,
   Menu,
+  Scissors,
+  Settings,
   ShieldCheck,
   Sparkles,
   User,
+  Users,
   X
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -26,10 +29,23 @@ const PUBLIC_NAV_LINKS = [
   { href: "/contact", label: "Contact" }
 ];
 
+const ADMIN_PUBLIC_NAV_LINKS = [
+  { href: "/", label: "Home" },
+  { href: "/about", label: "About" },
+  { href: "/services", label: "Services" },
+  { href: "/gallery", label: "Gallery" },
+  { href: "/videos", label: "Videos" },
+  { href: "/contact", label: "Contact" }
+];
+
 export default function Navbar() {
   const pathname = usePathname();
   const { user, logout, unreadCount, wishlistItems } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const isAdmin = Boolean(user && user.role === "ADMIN");
+  const isCustomer = Boolean(user && user.role === "CUSTOMER");
+  const navLinks = isAdmin ? ADMIN_PUBLIC_NAV_LINKS : PUBLIC_NAV_LINKS;
 
   function isActive(href) {
     if (href === "/") return pathname === "/";
@@ -62,7 +78,7 @@ export default function Navbar() {
           aria-label="Primary Navigation"
           className="hidden lg:flex items-center gap-6"
         >
-          {PUBLIC_NAV_LINKS.map((link) => (
+          {navLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}
@@ -70,8 +86,8 @@ export default function Navbar() {
                 link.href === "/booking"
                   ? "px-4 py-2 rounded-full bg-aurena-rosegold text-white hover:bg-aurena-charcoal shadow-soft"
                   : isActive(link.href)
-                  ? "text-aurena-rosegold font-semibold"
-                  : "text-aurena-charcoal/80 hover:text-aurena-rosegold"
+                    ? "text-aurena-rosegold font-semibold"
+                    : "text-aurena-charcoal/80 hover:text-aurena-rosegold"
               }`}
             >
               {link.label}
@@ -85,35 +101,117 @@ export default function Navbar() {
             <>
               <Link
                 href="/login"
+                data-testid="nav-login"
                 className="px-4 py-2 rounded-full text-sm font-medium text-aurena-charcoal hover:text-aurena-rosegold transition"
               >
                 Login
               </Link>
               <Link
                 href="/register"
+                data-testid="nav-register"
                 className="px-5 py-2 rounded-full border border-aurena-rosegold text-sm font-medium text-aurena-rosegold hover:bg-aurena-rosegold hover:text-white transition"
               >
                 Register
               </Link>
             </>
-          ) : (
+          ) : isAdmin ? (
             <div className="flex items-center gap-2">
-              {user.role === "ADMIN" && (
-                <Link
-                  href="/admin/dashboard"
-                  className="px-3 py-1.5 rounded-full bg-aurena-charcoal text-aurena-cream text-xs font-medium flex items-center gap-1.5 hover:bg-aurena-rosegold transition"
-                >
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  Admin
-                </Link>
-              )}
+              <Link
+                href="/admin/dashboard"
+                data-testid="nav-admin"
+                className="px-3.5 py-1.5 rounded-full bg-aurena-charcoal text-aurena-cream text-xs font-medium flex items-center gap-1.5 hover:bg-aurena-rosegold transition"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Admin Dashboard</span>
+              </Link>
 
+              <Link
+                href="/admin/appointments"
+                data-testid="nav-admin-appointments"
+                className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 hover:bg-aurena-beige transition ${
+                  isActive("/admin/appointments")
+                    ? "text-aurena-rosegold font-semibold"
+                    : "text-aurena-charcoal"
+                }`}
+              >
+                <Calendar className="w-4 h-4" />
+                <span>Manage Appointments</span>
+              </Link>
+
+              <Link
+                href="/admin/services"
+                data-testid="nav-admin-services"
+                className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 hover:bg-aurena-beige transition ${
+                  isActive("/admin/services")
+                    ? "text-aurena-rosegold font-semibold"
+                    : "text-aurena-charcoal"
+                }`}
+              >
+                <Scissors className="w-4 h-4" />
+                <span>Manage Services</span>
+              </Link>
+
+              <Link
+                href="/admin/customers"
+                data-testid="nav-admin-customers"
+                className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 hover:bg-aurena-beige transition ${
+                  isActive("/admin/customers")
+                    ? "text-aurena-rosegold font-semibold"
+                    : "text-aurena-charcoal"
+                }`}
+              >
+                <Users className="w-4 h-4" />
+                <span>Customers</span>
+              </Link>
+
+              <Link
+                href="/admin/settings"
+                data-testid="nav-admin-settings"
+                className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 hover:bg-aurena-beige transition ${
+                  isActive("/admin/settings")
+                    ? "text-aurena-rosegold font-semibold"
+                    : "text-aurena-charcoal"
+                }`}
+              >
+                <Settings className="w-4 h-4" />
+                <span>Settings</span>
+              </Link>
+
+              <Link
+                href="/profile"
+                data-testid="nav-profile"
+                className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 border border-aurena-border hover:border-aurena-rosegold transition ${
+                  isActive("/profile")
+                    ? "bg-aurena-blush/40 text-aurena-rosegold"
+                    : "text-aurena-charcoal"
+                }`}
+              >
+                <User className="w-4 h-4" />
+                <span>{user.firstName || "Profile"}</span>
+              </Link>
+
+              <button
+                type="button"
+                onClick={logout}
+                aria-label="Logout"
+                data-testid="nav-logout"
+                className="px-3 py-1.5 rounded-full text-xs font-medium text-aurena-muted hover:text-red-700 hover:bg-red-50 flex items-center gap-1 transition"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Logout</span>
+              </button>
+            </div>
+          ) : isCustomer ? (
+            <div className="flex items-center gap-2">
               <Link
                 href="/wishlist"
                 aria-label="Wishlist"
                 title="Wishlist"
+                data-testid="nav-wishlist"
                 className={`relative p-2 rounded-full hover:bg-aurena-beige transition ${
-                  isActive("/wishlist") ? "text-aurena-rosegold" : "text-aurena-charcoal"
+                  isActive("/wishlist")
+                    ? "text-aurena-rosegold"
+                    : "text-aurena-charcoal"
                 }`}
               >
                 <Heart className="w-5 h-5" />
@@ -128,6 +226,7 @@ export default function Navbar() {
                 href="/notifications"
                 aria-label="Notifications"
                 title="Notifications"
+                data-testid="nav-notifications"
                 className={`relative p-2 rounded-full hover:bg-aurena-beige transition ${
                   isActive("/notifications")
                     ? "text-aurena-rosegold"
@@ -147,6 +246,7 @@ export default function Navbar() {
 
               <Link
                 href="/appointments"
+                data-testid="nav-appointments"
                 className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 hover:bg-aurena-beige transition ${
                   isActive("/appointments")
                     ? "text-aurena-rosegold font-semibold"
@@ -154,11 +254,12 @@ export default function Navbar() {
                 }`}
               >
                 <Calendar className="w-4 h-4" />
-                My Appointments
+                <span>My Appointments</span>
               </Link>
 
               <Link
                 href="/profile"
+                data-testid="nav-profile"
                 className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 border border-aurena-border hover:border-aurena-rosegold transition ${
                   isActive("/profile")
                     ? "bg-aurena-blush/40 text-aurena-rosegold"
@@ -173,20 +274,23 @@ export default function Navbar() {
                 type="button"
                 onClick={logout}
                 aria-label="Logout"
+                data-testid="nav-logout"
                 className="px-3 py-1.5 rounded-full text-xs font-medium text-aurena-muted hover:text-red-700 hover:bg-red-50 flex items-center gap-1 transition"
               >
                 <LogOut className="w-4 h-4" />
                 <span>Logout</span>
               </button>
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* Mobile Menu Button */}
         <button
           type="button"
           onClick={() => setMobileOpen((prev) => !prev)}
-          aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
+          aria-label={
+            mobileOpen ? "Close navigation menu" : "Open navigation menu"
+          }
           aria-expanded={mobileOpen}
           data-testid="mobile-menu-toggle"
           className="lg:hidden p-2.5 rounded-xl border border-aurena-border text-aurena-charcoal hover:bg-aurena-beige"
@@ -202,7 +306,7 @@ export default function Navbar() {
           data-testid="mobile-nav-drawer"
           className="lg:hidden bg-aurena-cream border-b border-aurena-border px-4 pt-3 pb-6 space-y-2 shadow-luxury"
         >
-          {PUBLIC_NAV_LINKS.map((link) => (
+          {navLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}
@@ -235,17 +339,63 @@ export default function Navbar() {
                   Register
                 </Link>
               </div>
+            ) : isAdmin ? (
+              <>
+                <Link
+                  href="/admin/dashboard"
+                  onClick={() => setMobileOpen(false)}
+                  className="block px-4 py-2.5 rounded-xl text-sm font-medium bg-aurena-charcoal text-white"
+                >
+                  Admin Dashboard
+                </Link>
+                <Link
+                  href="/admin/appointments"
+                  onClick={() => setMobileOpen(false)}
+                  className="block px-4 py-2.5 rounded-xl text-sm font-medium text-aurena-charcoal hover:bg-aurena-beige"
+                >
+                  Manage Appointments
+                </Link>
+                <Link
+                  href="/admin/services"
+                  onClick={() => setMobileOpen(false)}
+                  className="block px-4 py-2.5 rounded-xl text-sm font-medium text-aurena-charcoal hover:bg-aurena-beige"
+                >
+                  Manage Services
+                </Link>
+                <Link
+                  href="/admin/customers"
+                  onClick={() => setMobileOpen(false)}
+                  className="block px-4 py-2.5 rounded-xl text-sm font-medium text-aurena-charcoal hover:bg-aurena-beige"
+                >
+                  Customers
+                </Link>
+                <Link
+                  href="/admin/settings"
+                  onClick={() => setMobileOpen(false)}
+                  className="block px-4 py-2.5 rounded-xl text-sm font-medium text-aurena-charcoal hover:bg-aurena-beige"
+                >
+                  Settings
+                </Link>
+                <Link
+                  href="/profile"
+                  onClick={() => setMobileOpen(false)}
+                  className="block px-4 py-2.5 rounded-xl text-sm font-medium text-aurena-charcoal hover:bg-aurena-beige"
+                >
+                  Profile
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileOpen(false);
+                    logout();
+                  }}
+                  className="w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium text-red-600 hover:bg-red-50"
+                >
+                  Logout
+                </button>
+              </>
             ) : (
               <>
-                {user.role === "ADMIN" && (
-                  <Link
-                    href="/admin/dashboard"
-                    onClick={() => setMobileOpen(false)}
-                    className="block px-4 py-2.5 rounded-xl text-sm font-medium bg-aurena-charcoal text-white"
-                  >
-                    Admin Dashboard
-                  </Link>
-                )}
                 <Link
                   href="/profile"
                   onClick={() => setMobileOpen(false)}
