@@ -56,38 +56,14 @@ export default async function AdminLayout({ children }) {
     );
   }
 
-  // If a logged-in non-admin customer attempts to visit /admin/*, block on server
+  // If a logged-in non-admin customer attempts to visit /admin/*, deny the
+  // request. Rendering the admin shell would be a privilege leak, and returning
+  // a 200 page for a forbidden route makes automated smoke checks unable to
+  // distinguish "denied" from "allowed". Redirecting to /forbidden (the same
+  // page the dashboard already used) yields a proper non-2xx response and
+  // keeps the customer portal untouched.
   if (user.role !== "ADMIN") {
-    return (
-      <section
-        data-testid="admin-forbidden-view"
-        className="min-h-screen flex items-center justify-center bg-aurena-cream px-4"
-      >
-        <div className="max-w-lg w-full p-10 rounded-3xl bg-white border border-aurena-border shadow-luxury text-center space-y-5">
-          <div className="w-14 h-14 rounded-full bg-red-50 text-red-600 flex items-center justify-center mx-auto">
-            <ShieldAlert className="w-7 h-7" />
-          </div>
-          <p className="text-xs uppercase tracking-[0.2em] text-red-600 font-semibold">
-            403 • Forbidden
-          </p>
-          <h1 className="font-serif text-3xl font-bold text-aurena-charcoal">
-            Administrator Access Required
-          </h1>
-          <p className="text-sm text-aurena-muted">
-            Your account does not have administrator privileges to access the
-            Aurena Nails management portal.
-          </p>
-          <div className="pt-2">
-            <Link
-              href="/"
-              className="inline-block px-6 py-3 rounded-full bg-aurena-rosegold text-white text-sm font-medium hover:bg-aurena-charcoal transition"
-            >
-              Return to Customer Website
-            </Link>
-          </div>
-        </div>
-      </section>
-    );
+    redirect("/forbidden");
   }
 
   return <AdminShell adminUser={user}>{children}</AdminShell>;

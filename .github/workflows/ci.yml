@@ -60,6 +60,21 @@ jobs:
       - name: Seed representative data
         run: node prisma/seed.js
 
+      # Exercises the administrator provisioning path twice: the first run
+      # creates the credential, the second resets it. Both must verify, which
+      # is the regression this fixes (the old seed silently skipped password
+      # updates and left admin login returning 401).
+      - name: Provision test administrator (must be idempotent)
+        env:
+          INITIAL_ADMIN_EMAIL: ci.admin@aurenanails.com
+          INITIAL_ADMIN_PASSWORD: CiOnlyAdmin@2026
+          INITIAL_ADMIN_MOBILE: "9876500001"
+        run: |
+          node scripts/provision-admin.js --apply
+          node scripts/provision-admin.js --check
+          node scripts/provision-admin.js --apply
+          node scripts/provision-admin.js --check
+
       - name: Production build
         run: npm run build
 
@@ -102,4 +117,8 @@ jobs:
         run: node scripts/wait-for-netlify-deploy.mjs
 
       - name: Run live production smoke test
+        # Optional SMOKE_ADMIN_* secrets enable the administrator login checks.
+        env:
+          SMOKE_ADMIN_EMAIL: ${{ secrets.SMOKE_ADMIN_EMAIL }}
+          SMOKE_ADMIN_PASSWORD: ${{ secrets.SMOKE_ADMIN_PASSWORD }}
         run: node scripts/live-smoke.mjs

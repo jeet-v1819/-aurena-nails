@@ -26,6 +26,11 @@ jobs:
           node-version: "20"
 
       - name: Run live smoke test
+        # SMOKE_ADMIN_* are optional repository secrets. When configured, the
+        # smoke test also proves that the production administrator can sign in
+        # and open the dashboard. No credentials are stored in the repository.
         env:
           SMOKE_BASE_URL: ${{ inputs.base_url }}
+          SMOKE_ADMIN_EMAIL: ${{ secrets.SMOKE_ADMIN_EMAIL }}
+          SMOKE_ADMIN_PASSWORD: ${{ secrets.SMOKE_ADMIN_PASSWORD }}
         run: node scripts/live-smoke.mjs

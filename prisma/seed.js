@@ -643,62 +643,61 @@ async function seed() {
   }
   console.log("✔ Verified WebsiteContent sections.");
 
-  // 7. Optional secure first-admin setup via environment variables (no hardcoded credentials)
+  // 7. Optional secure administrator provisioning via environment variables.
+  //    No credentials are hardcoded and nothing is printed to the console.
+  //
+  //    Runs even when NEON_AUTH_BASE_URL is not set: the credential is written
+  //    directly to the Neon database in the same scrypt format that
+  //    Neon Auth / Better Auth verifies at sign-in time, so `npm run db:seed`
+  //    is a reliable, repeatable create-or-reset procedure.
   const adminEmail = process.env.INITIAL_ADMIN_EMAIL?.trim()?.toLowerCase();
   const adminPassword = process.env.INITIAL_ADMIN_PASSWORD;
-  const adminMobile = process.env.INITIAL_ADMIN_MOBILE?.trim() || "9876543210";
+  const adminMobile = process.env.INITIAL_ADMIN_MOBILE?.trim() || undefined;
 
-  if (
-    adminEmail &&
-    adminPassword &&
-    adminPassword !== "CHANGE_ME_STRONG_PASSWORD" &&
-    process.env.NEON_AUTH_BASE_URL
-  ) {
-    console.log(`Provisioning initial admin account for ${adminEmail}...`);
-    const baseUrl = process.env.NEON_AUTH_BASE_URL;
-    const signUpRes = await fetch(`${baseUrl}/sign-up/email`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Origin: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-        "x-neon-auth-proxy": "nextjs"
-      },
-      body: JSON.stringify({
-        email: adminEmail,
-        password: adminPassword,
-        name: "Aurena Administrator"
-      })
+  if (adminEmail && adminPassword) {
+    const { provisionAdmin } = require("./adminProvisioning");
+    console.log(`Provisioning administrator ${adminEmail} ...`);
+
+    const result = await provisionAdmin(prisma, {
+      email: adminEmail,
+      password: adminPassword,
+      mobile: adminMobile,
+      firstName: process.env.INITIAL_ADMIN_FIRST_NAME?.trim() || "Aurena",
+      lastName: process.env.INITIAL_ADMIN_LAST_NAME?.trim() || "Admin",
+      revokeSessions:
+        String(process.env.INITIAL_ADMIN_REVOKE_SESSIONS || "").toLowerCase() ===
+        "true"
     });
 
-    let authId = null;
-    if (signUpRes.ok) {
-      const body = await signUpRes.json();
-      authId = body?.user?.id || null;
-    } else {
-      const existingAuth = await prisma.$queryRaw`
-        SELECT id FROM "neon_auth"."user" WHERE email = ${adminEmail} LIMIT 1
-      `;
-      if (Array.isArray(existingAuth) && existingAuth[0]?.id) {
-        authId = String(existingAuth[0].id);
-      }
+    if (!result.ok) {
+      throw new Error(
+        [
+          "Administrator provisioning could not be verified.",
+          `email=${result.email}`,
+          `appRole=${result.role || "missing"}`,
+          `authUser=${result.authUserExists === false ? "missing" : "present"}`,
+          `credentialAccount=${result.credentialAccountExists ? "present" : "missing"}`,
+          `passwordVerified=${result.passwordVerified}`,
+          result.passwordFailureReason
+            ? `reason=${result.passwordFailureReason}`
+            : null,
+          "re-run `node scripts/provision-admin.js --apply` and check the DATABASE_URL target."
+        ]
+          .filter(Boolean)
+          .join(" ")
+      );
     }
 
-    if (authId) {
-      await prisma.user.upsert({
-        where: { email: adminEmail },
-        update: { role: "ADMIN", active: true, authId },
-        create: {
-          authId,
-          email: adminEmail,
-          firstName: "Aurena",
-          lastName: "Admin",
-          mobile: adminMobile,
-          role: "ADMIN",
-          active: true
-        }
-      });
-      console.log(`✔ Initial admin account (${adminEmail}) verified with ADMIN role.`);
-    }
+    console.log(
+      `✔ Administrator ${result.email} ready: role=ADMIN, active=true, ` +
+        `credentialAccount=present, password=verified` +
+        (result.passwordCreated ? " (created)" : " (reset)") +
+        (result.sessionsRevoked ? `, sessionsRevoked=${result.sessionsRevoked}` : "")
+    );
+  } else if (adminEmail && !adminPassword) {
+    console.warn(
+      "⚠ INITIAL_ADMIN_EMAIL was provided without INITIAL_ADMIN_PASSWORD; administrator provisioning was skipped."
+    );
   }
 
   console.log("Aurena Nails seed completed successfully.");
