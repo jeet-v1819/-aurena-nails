@@ -1,0 +1,31 @@
+name: Live production smoke test
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Site URL to test"
+        required: false
+        default: "https://aurena-nails.netlify.app"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Auth, session and page smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run live smoke test
+        env:
+          SMOKE_BASE_URL: ${{ inputs.base_url }}
+        run: node scripts/live-smoke.mjs
