@@ -4,6 +4,7 @@ import { hashPassword, verifyPassword } from "@better-auth/utils/password";
 import { serializeSignedCookie } from "better-call";
 import { NEON_AUTH_SESSION_COOKIE_NAME } from "@neondatabase/auth/server";
 import prisma from "@/lib/prisma";
+import { ensureNeonAuthSchema } from "@/lib/neonAuthSchema";
 import { getServerEnv } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
@@ -127,6 +128,7 @@ function formatNeonUser(row) {
 
 export async function GET(request, { params }) {
   const path = (params?.all || []).join("/");
+  await ensureNeonAuthSchema();
 
   if (path === "get-session") {
     const rawToken = extractRawTokenFromHeader(request.headers.get("cookie"));
@@ -187,6 +189,7 @@ export async function GET(request, { params }) {
 
 export async function POST(request, { params }) {
   const path = (params?.all || []).join("/");
+  await ensureNeonAuthSchema();
   const body = await request.json().catch(() => ({}));
 
   if (path === "sign-up/email") {
