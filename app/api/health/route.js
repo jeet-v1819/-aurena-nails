@@ -45,8 +45,26 @@ export async function GET() {
     cookieSecretConfigured: Boolean(
       process.env.AUTH_SECRET || process.env.NEON_AUTH_COOKIE_SECRET
     ),
-    usingSelfHostedFallback: !authBaseUrl
+    usingSelfHostedFallback: !authBaseUrl,
+    tablesReady: false
   };
+
+  if (database.connected) {
+    try {
+      const rows = await prisma.$queryRaw`
+        SELECT COUNT(*)::int AS "count"
+        FROM information_schema.tables
+        WHERE table_schema = 'neon_auth'
+          AND table_name IN ('user', 'account', 'session')
+      `;
+      auth.tablesReady = Number(rows?.[0]?.count || 0) >= 3;
+    } catch (error) {
+      console.error("[health] Neon Auth table check failed", {
+        code: error?.code,
+        message: error?.message
+      });
+    }
+  }
 
   const ok = database.connected && database.schemaReady;
 
