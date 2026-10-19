@@ -78,3 +78,28 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+
+  live-smoke:
+    # Verify the real deployment (real Neon database + real auth) after a
+    # merge to main. Pull requests and feature branches keep using the local
+    # Postgres service above.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: build-and-e2e
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Wait for the Netlify production deploy
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+        run: node scripts/wait-for-netlify-deploy.mjs
+
+      - name: Run live production smoke test
+        run: node scripts/live-smoke.mjs
