@@ -262,6 +262,69 @@ async function main() {
 
   await request("/api/auth/logout", { method: "POST" });
 
+  /* 8. Administrator portal (opt-in) ------------------------------ *
+   * Only runs when SMOKE_ADMIN_EMAIL / SMOKE_ADMIN_PASSWORD are
+   * provided, so production credentials never live in the repo.
+   * This is the check that actually proves the admin login fix.
+   */
+  const adminEmail = process.env.SMOKE_ADMIN_EMAIL || "";
+  const adminPassword = process.env.SMOKE_ADMIN_PASSWORD || "";
+
+  if (adminEmail && adminPassword) {
+    jar.clear();
+
+    const wrongPassword = await request("/api/auth/admin-login", {
+      method: "POST",
+      body: { identifier: adminEmail, password: `${adminPassword}-wrong` }
+    });
+    check(
+      "Wrong administrator password is rejected",
+      wrongPassword.status === 401,
+      `status ${wrongPassword.status} ${summarize(wrongPassword.json?.error || "")}`
+    );
+
+    jar.clear();
+    const adminLogin = await request("/api/auth/admin-login", {
+      method: "POST",
+      body: { identifier: adminEmail, password: adminPassword, rememberMe: true }
+    });
+    check(
+      "Administrator signs in via POST /api/auth/admin-login",
+      adminLogin.status === 200 && adminLogin.json?.user?.role === "ADMIN",
+      `status ${adminLogin.status} role=${adminLogin.json?.user?.role || "none"}`
+    );
+
+    const adminSession = await request("/api/auth/session");
+    check(
+      "Administrator session is valid",
+      adminSession.status === 200 &&
+        adminSession.json?.user?.role === "ADMIN" &&
+        adminSession.json?.user?.email === adminEmail.toLowerCase(),
+      `status ${adminSession.status}`
+    );
+
+    const adminDashboardPage = await request("/admin/dashboard");
+    check(
+      "Administrator opens /admin/dashboard",
+      adminDashboardPage.status === 200,
+      `status ${adminDashboardPage.status}`
+    );
+
+    const adminDashboardApi = await request("/api/admin/dashboard");
+    check(
+      "Administrator can call /api/admin/dashboard",
+      adminDashboardApi.status === 200,
+      `status ${adminDashboardApi.status}`
+    );
+
+    await request("/api/auth/logout", { method: "POST" });
+    jar.clear();
+  } else {
+    console.log(
+      "[SKIP] Administrator login checks — set SMOKE_ADMIN_EMAIL and SMOKE_ADMIN_PASSWORD to enable"
+    );
+  }
+
   /* Summary ------------------------------------------------------ */
   const passed = results.length - failures;
   console.log(`\n${passed}/${results.length} checks passed.`);

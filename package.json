@@ -12,6 +12,8 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "node prisma/seed.js",
+    "admin:provision": "node scripts/provision-admin.js",
+    "test:auth": "node scripts/verify-auth-flows.js",
     "test:e2e": "playwright test"
   },
   "prisma": {

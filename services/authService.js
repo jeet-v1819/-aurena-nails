@@ -230,6 +230,49 @@ export async function loginUser(
         "AUTH_UNAVAILABLE"
       );
     }
+
+    // Operational diagnostics only — the response is unchanged, and no
+    // password, hash or token is ever logged. This distinguishes "wrong
+    // password" from "the account has no credential row / password", which is
+    // the state a failed or skipped administrator seed leaves behind.
+    if (preloadedUser?.authId) {
+      try {
+        const credentialRows = await prisma.$queryRaw`
+          SELECT
+            COUNT(*)::int AS "accountCount",
+            COUNT("password")::int AS "withPassword"
+          FROM "neon_auth"."account"
+          WHERE "userId" = ${String(preloadedUser.authId)}::uuid
+            AND "providerId" = 'credential'
+        `;
+        const row = credentialRows?.[0] || {};
+        const hasUsablePassword =
+          Number(row.accountCount) > 0 && Number(row.withPassword) > 0;
+
+        console.warn(
+          hasUsablePassword
+            ? "[auth] Credential sign-in rejected by the auth provider (password mismatch)"
+            : "[auth] Credential sign-in rejected because no password is stored for this account",
+          {
+            appRole: preloadedUser.role,
+            credentialAccounts: Number(row.accountCount) || 0,
+            credentialsWithPassword: Number(row.withPassword) || 0,
+            adminPortal: requireAdminRole
+          }
+        );
+
+        if (!hasUsablePassword && requireAdminRole) {
+          console.warn(
+            "[auth] Administrator credentials are not provisioned. Run " +
+              "`node scripts/provision-admin.js --apply` with DATABASE_URL, " +
+              "INITIAL_ADMIN_EMAIL and INITIAL_ADMIN_PASSWORD set."
+          );
+        }
+      } catch {
+        // Diagnostics must never change the authentication response.
+      }
+    }
+
     throw new AppError(
       "Invalid email/mobile number or password.",
       401,
