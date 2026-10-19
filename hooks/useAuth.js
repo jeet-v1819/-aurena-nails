@@ -89,6 +89,11 @@ export function AuthProvider({ initialUser = null, children }) {
         setUnreadCount(0);
         return null;
       }
+      if (!res.ok) {
+        // A transient database/auth outage must not be treated as a logout.
+        // Keep the current user state and let the page surface a retry.
+        return null;
+      }
       setInactiveMessage("");
       const nextUser = data?.user || null;
       setUserState(nextUser);

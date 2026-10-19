@@ -38,8 +38,12 @@ function LoginFormContent() {
       }
 
       const loggedInUser = data.user || data.data?.user || null;
+      if (!loggedInUser) {
+        setError("Sign-in did not establish a valid session. Please try again.");
+        return;
+      }
       setUser(loggedInUser);
-      showToast(`Welcome back, ${loggedInUser?.firstName || "Guest"}!`);
+      showToast(`Welcome back, ${loggedInUser.firstName || "Guest"}!`);
 
       const redirectParam = searchParams?.get("redirect");
       let destination = "/profile";
@@ -49,7 +53,7 @@ function LoginFormContent() {
         destination = "/admin/dashboard";
       }
 
-      router.push(destination);
+      router.replace(destination);
       router.refresh();
     } catch {
       setError("Network error while signing in.");

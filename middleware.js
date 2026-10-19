@@ -42,7 +42,14 @@ export function middleware(request) {
     return NextResponse.redirect(adminLoginUrl);
   }
 
-  return NextResponse.next();
+  // Expose the pathname to server layouts so they can distinguish e.g.
+  // /admin/login from the protected admin pages without a second rewrite.
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-aurena-pathname", pathname);
+
+  return NextResponse.next({
+    request: { headers: requestHeaders }
+  });
 }
 
 export const config = {

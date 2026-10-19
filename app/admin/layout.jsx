@@ -1,5 +1,7 @@
 import React from "react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { ShieldAlert } from "lucide-react";
 import { getSessionAndUser } from "@/lib/auth";
 import AdminShell from "@/components/admin/AdminShell";
@@ -7,10 +9,55 @@ import AdminShell from "@/components/admin/AdminShell";
 export const dynamic = "force-dynamic";
 
 export default async function AdminLayout({ children }) {
-  const { user } = await getSessionAndUser({ disableCookieCache: true });
+  const headerStore = await headers();
+  const pathname = headerStore.get("x-aurena-pathname") || "";
+  const isLoginRoute =
+    pathname === "/admin/login" || pathname.startsWith("/admin/login/");
+
+  // The login screen lives under /admin but must render outside the admin
+  // shell (and without an authenticated session).
+  if (isLoginRoute) {
+    return children;
+  }
+
+  const { user, databaseError } = await getSessionAndUser({
+    disableCookieCache: true
+  });
+
+  if (databaseError) {
+    return (
+      <section
+        data-testid="admin-unavailable-view"
+        className="min-h-screen flex items-center justify-center bg-aurena-cream px-4"
+      >
+        <div className="max-w-lg w-full p-10 rounded-3xl bg-white border border-aurena-border shadow-luxury text-center space-y-4">
+          <ShieldAlert className="w-10 h-10 text-amber-600 mx-auto" />
+          <h1 className="font-serif text-3xl font-bold text-aurena-charcoal">
+            Admin Portal Temporarily Unavailable
+          </h1>
+          <p className="text-sm text-aurena-muted">
+            We could not verify your session against the database. Please try
+            again in a moment.
+          </p>
+          <Link
+            href="/admin/dashboard"
+            className="inline-block px-6 py-3 rounded-full bg-aurena-rosegold text-white text-sm font-medium hover:bg-aurena-charcoal transition"
+          >
+            Retry
+          </Link>
+        </div>
+      </section>
+    );
+  }
+
+  if (!user) {
+    redirect(
+      `/admin/login?redirect=${encodeURIComponent(pathname || "/admin/dashboard")}`
+    );
+  }
 
   // If a logged-in non-admin customer attempts to visit /admin/*, block on server
-  if (user && user.role !== "ADMIN") {
+  if (user.role !== "ADMIN") {
     return (
       <section
         data-testid="admin-forbidden-view"
