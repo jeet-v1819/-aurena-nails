@@ -1,8 +1,26 @@
 const { PrismaClient } = require("@prisma/client");
+const { PrismaPg } = require("@prisma/adapter-pg");
+const { Pool } = require("pg");
 const { hashPassword } = require("@better-auth/utils/password");
 const crypto = require("crypto");
 
-const prisma = new PrismaClient();
+const connectionString =
+  process.env.DATABASE_URL ||
+  process.env.NEON_DATABASE_URL ||
+  process.env.POSTGRES_URL ||
+  "";
+
+const pool = new Pool({
+  connectionString: connectionString || undefined,
+  max: 3,
+  idleTimeoutMillis: 10000,
+  connectionTimeoutMillis: 15000,
+  allowExitOnIdle: true
+});
+
+const prisma = new PrismaClient({
+  adapter: new PrismaPg(pool, { schema: "aurena" })
+});
 
 const TEST_PREFIX = "aurena-pw-suite-";
 const TEST_ADMIN_EMAIL = `${TEST_PREFIX}admin@aurenanails.com`;

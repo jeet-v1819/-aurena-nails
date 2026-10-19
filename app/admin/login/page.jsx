@@ -33,9 +33,14 @@ export default function AdminLoginPage() {
         return;
       }
 
+      if (!data.user || data.user.role !== "ADMIN") {
+        setError("Administrator access could not be verified.");
+        return;
+      }
+
       setUser(data.user);
       showToast("Signed in to Aurena Nails Admin Portal.");
-      router.push("/admin/dashboard");
+      router.replace("/admin/dashboard");
       router.refresh();
     } catch {
       setError("Network error while signing in.");

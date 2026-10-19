@@ -2,8 +2,22 @@ require("dotenv").config();
 const fs = require("fs");
 const path = require("path");
 const { PrismaClient } = require("@prisma/client");
+const { PrismaPg } = require("@prisma/adapter-pg");
+const { Pool } = require("pg");
 
-const prisma = new PrismaClient();
+const pool = new Pool({
+  connectionString:
+    process.env.DATABASE_URL ||
+    process.env.NEON_DATABASE_URL ||
+    process.env.POSTGRES_URL ||
+    undefined,
+  max: 2,
+  allowExitOnIdle: true
+});
+
+const prisma = new PrismaClient({
+  adapter: new PrismaPg(pool, { schema: "aurena" })
+});
 
 const CATEGORIES = [
   {

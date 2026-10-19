@@ -18,9 +18,12 @@
     "seed": "node prisma/seed.js"
   },
   "dependencies": {
+    "@better-auth/utils": "^0.4.2",
     "@hookform/resolvers": "^3.9.1",
     "@neondatabase/auth": "^0.6.0-beta",
+    "@prisma/adapter-pg": "^5.22.0",
     "@prisma/client": "5.22.0",
+    "better-call": "^1.4.0",
     "cloudinary": "^2.5.1",
     "dotenv": "^16.4.7",
     "framer-motion": "^11.15.0",

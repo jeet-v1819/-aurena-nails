@@ -8,7 +8,10 @@ import {
   ShieldCheck,
   Sparkles
 } from "lucide-react";
-import { getPublicWebsiteContent } from "@/services/contentService";
+import {
+  DEFAULT_WEBSITE_CONTENT,
+  getPublicWebsiteContent
+} from "@/services/contentService";
 
 export const metadata = {
   title: "About Aurena Nails"
@@ -17,8 +20,19 @@ export const metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function AboutPage() {
-  const content = await getPublicWebsiteContent();
-  const about = content.about || {};
+  let content;
+  try {
+    content = await getPublicWebsiteContent({ allowFallback: true });
+  } catch (error) {
+    // About content is editorial and optional: a database hiccup must never
+    // take the page down. Log the real error so it stays observable.
+    console.error("[about] Falling back to default studio content", {
+      code: error?.code,
+      message: error?.message
+    });
+    content = { about: DEFAULT_WEBSITE_CONTENT.about };
+  }
+  const about = content?.about || DEFAULT_WEBSITE_CONTENT.about;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 space-y-20">

@@ -6,6 +6,18 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const result = await getSessionAndUser({ disableCookieCache: true });
+    if (result.databaseError) {
+      return jsonSuccess(
+        {
+          user: null,
+          session: null,
+          code: "AUTH_UNAVAILABLE",
+          error:
+            "Authentication is temporarily unavailable. Please try again in a moment."
+        },
+        503
+      );
+    }
     if (result.inactive) {
       return jsonSuccess(
         {

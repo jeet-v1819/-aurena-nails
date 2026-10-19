@@ -21,7 +21,7 @@ export default async function RootLayout({ children }) {
     getSessionAndUser({ disableCookieCache: false }).catch(() => ({
       user: null
     })),
-    getPublicWebsiteContent().catch(() => ({
+    getPublicWebsiteContent({ allowFallback: true }).catch(() => ({
       contact: {},
       businessHours: [],
       holidays: []

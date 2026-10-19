@@ -52,11 +52,39 @@ export const DEFAULT_WEBSITE_CONTENT = {
   }
 };
 
-export async function getPublicWebsiteContent() {
+async function loadPublicSection(label, query, fallbackValue, allowFallback) {
+  try {
+    return await query();
+  } catch (error) {
+    if (!allowFallback) throw error;
+    console.error(`[public-content] Failed to load ${label}`, {
+      code: error?.code,
+      message: error?.message
+    });
+    return fallbackValue;
+  }
+}
+
+export async function getPublicWebsiteContent({ allowFallback = false } = {}) {
   const [rows, businessHours, holidays] = await Promise.all([
-    prisma.websiteContent.findMany(),
-    prisma.businessHours.findMany({ orderBy: { weekday: "asc" } }),
-    prisma.holiday.findMany({ orderBy: { date: "asc" } })
+    loadPublicSection(
+      "website content",
+      () => prisma.websiteContent.findMany(),
+      [],
+      allowFallback
+    ),
+    loadPublicSection(
+      "business hours",
+      () => prisma.businessHours.findMany({ orderBy: { weekday: "asc" } }),
+      [],
+      allowFallback
+    ),
+    loadPublicSection(
+      "holidays",
+      () => prisma.holiday.findMany({ orderBy: { date: "asc" } }),
+      [],
+      allowFallback
+    )
   ]);
 
   const map = {};

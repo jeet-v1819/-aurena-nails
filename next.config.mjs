@@ -6,8 +6,20 @@ const nextConfig = {
     serverComponentsExternalPackages: [
       "@prisma/client",
       "@prisma/adapter-pg",
+      "@prisma/driver-adapter-utils",
       "pg"
-    ]
+    ],
+    // Ensure the Prisma WASM query engine ships with the Netlify function.
+    // The pg driver adapter avoids any dependency on a host-specific native
+    // query-engine binary in the serverless runtime.
+    outputFileTracingIncludes: {
+      "/*": [
+        "./node_modules/.prisma/client/*.wasm",
+        "./node_modules/.prisma/client/*.js",
+        "./node_modules/.prisma/client/schema.prisma",
+        "./node_modules/@prisma/client/runtime/*.wasm"
+      ]
+    }
   },
   images: {
     remotePatterns: [

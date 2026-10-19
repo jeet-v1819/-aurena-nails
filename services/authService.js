@@ -66,6 +66,9 @@ export async function registerCustomer(rawInput, ipKey = "anon") {
   const auth = getNeonAuthServer();
   const fullName = `${data.firstName} ${data.lastName}`.trim();
 
+  // Never carry a previous visitor's session into a brand-new account.
+  await clearAuthSessionCookies();
+
   const { data: signUpData, error: signUpError } = await auth.signUp.email({
     email: data.email,
     password: data.password,
@@ -204,6 +207,11 @@ export async function loginUser(
   }
 
   const auth = getNeonAuthServer();
+
+  // Remove any cookies from a previous session before establishing this one.
+  // Otherwise an old fallback token could be reused for the new login.
+  await clearAuthSessionCookies();
+
   const { data: signInData, error: signInError } = await auth.signIn.email({
     email: targetEmail,
     password: parsed.password,
@@ -211,6 +219,17 @@ export async function loginUser(
   });
 
   if (signInError || !signInData?.user?.id) {
+    if (signInError && Number(signInError.status) >= 500) {
+      console.error("[auth] Neon Auth sign-in unavailable", {
+        status: signInError.status,
+        code: signInError.code
+      });
+      throw new AppError(
+        "Sign-in is temporarily unavailable. Please try again in a moment.",
+        503,
+        "AUTH_UNAVAILABLE"
+      );
+    }
     throw new AppError(
       "Invalid email/mobile number or password.",
       401,

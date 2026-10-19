@@ -14,7 +14,10 @@ export const dynamic = "force-dynamic";
 export default async function HomePage() {
   const [contentData, servicesRes, galleryRes, videosRes, reviews] =
     await Promise.all([
-      getPublicWebsiteContent().catch(() => ({ home: {}, about: {} })),
+      getPublicWebsiteContent({ allowFallback: true }).catch(() => ({
+        home: {},
+        about: {}
+      })),
       listPublicServices({ featuredOnly: true, limit: 6 }).catch(() => ({
         items: []
       })),
