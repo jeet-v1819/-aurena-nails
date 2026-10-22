@@ -51,11 +51,17 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps --no-audit --no-fund
 
-      - name: Apply database migrations
+      - name: Unit tests (read-only schema and migration checks)
+        run: npm run test:unit
+
+      - name: Apply database migrations (fresh CI database only)
         run: npx prisma migrate deploy
 
       - name: Create Neon Auth test tables
         run: node scripts/setup-test-db.mjs
+
+      - name: Read-only schema preflight
+        run: npm run db:inspect
 
       - name: Seed representative data
         run: node prisma/seed.js
@@ -69,6 +75,7 @@ jobs:
           INITIAL_ADMIN_EMAIL: ci.admin@aurenanails.com
           INITIAL_ADMIN_PASSWORD: CiOnlyAdmin@2026
           INITIAL_ADMIN_MOBILE: "9876500001"
+          CONFIRM_DATABASE_TARGET: localhost/aurena_nails
         run: |
           node scripts/provision-admin.js --apply
           node scripts/provision-admin.js --check

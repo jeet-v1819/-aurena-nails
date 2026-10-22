@@ -16,7 +16,7 @@ const pool = new Pool({
 });
 
 const prisma = new PrismaClient({
-  adapter: new PrismaPg(pool, { schema: "aurena" })
+  adapter: new PrismaPg(pool, { schema: "public" })
 });
 
 const CATEGORIES = [
@@ -443,6 +443,11 @@ function ensureSampleMp4File() {
 }
 
 async function seed() {
+  if (process.env.INITIAL_ADMIN_EMAIL || process.env.INITIAL_ADMIN_PASSWORD) {
+    // Seeding is not the production password-reset path. The separate CLI
+    // performs a read-only schema/target preflight before making any changes.
+    throw new Error("Run scripts/provision-admin.js --check then --apply to provision an administrator; seed does not reset credentials.");
+  }
   console.log("Starting Aurena Nails non-destructive database seed...");
   ensureSampleMp4File();
 
@@ -643,69 +648,12 @@ async function seed() {
   }
   console.log("✔ Verified WebsiteContent sections.");
 
-  // 7. Optional secure administrator provisioning via environment variables.
-  //    No credentials are hardcoded and nothing is printed to the console.
-  //
-  //    Runs even when NEON_AUTH_BASE_URL is not set: the credential is written
-  //    directly to the Neon database in the same scrypt format that
-  //    Neon Auth / Better Auth verifies at sign-in time, so `npm run db:seed`
-  //    is a reliable, repeatable create-or-reset procedure.
-  const adminEmail = process.env.INITIAL_ADMIN_EMAIL?.trim()?.toLowerCase();
-  const adminPassword = process.env.INITIAL_ADMIN_PASSWORD;
-  const adminMobile = process.env.INITIAL_ADMIN_MOBILE?.trim() || undefined;
-
-  if (adminEmail && adminPassword) {
-    const { provisionAdmin } = require("./adminProvisioning");
-    console.log(`Provisioning administrator ${adminEmail} ...`);
-
-    const result = await provisionAdmin(prisma, {
-      email: adminEmail,
-      password: adminPassword,
-      mobile: adminMobile,
-      firstName: process.env.INITIAL_ADMIN_FIRST_NAME?.trim() || "Aurena",
-      lastName: process.env.INITIAL_ADMIN_LAST_NAME?.trim() || "Admin",
-      revokeSessions:
-        String(process.env.INITIAL_ADMIN_REVOKE_SESSIONS || "").toLowerCase() ===
-        "true"
-    });
-
-    if (!result.ok) {
-      throw new Error(
-        [
-          "Administrator provisioning could not be verified.",
-          `email=${result.email}`,
-          `appRole=${result.role || "missing"}`,
-          `authUser=${result.authUserExists === false ? "missing" : "present"}`,
-          `credentialAccount=${result.credentialAccountExists ? "present" : "missing"}`,
-          `passwordVerified=${result.passwordVerified}`,
-          result.passwordFailureReason
-            ? `reason=${result.passwordFailureReason}`
-            : null,
-          "re-run `node scripts/provision-admin.js --apply` and check the DATABASE_URL target."
-        ]
-          .filter(Boolean)
-          .join(" ")
-      );
-    }
-
-    console.log(
-      `✔ Administrator ${result.email} ready: role=ADMIN, active=true, ` +
-        `credentialAccount=present, password=verified` +
-        (result.passwordCreated ? " (created)" : " (reset)") +
-        (result.sessionsRevoked ? `, sessionsRevoked=${result.sessionsRevoked}` : "")
-    );
-  } else if (adminEmail && !adminPassword) {
-    console.warn(
-      "⚠ INITIAL_ADMIN_EMAIL was provided without INITIAL_ADMIN_PASSWORD; administrator provisioning was skipped."
-    );
-  }
-
   console.log("Aurena Nails seed completed successfully.");
 }
 
 seed()
   .catch((err) => {
-    console.error("Seed error:", err);
+    console.error("Seed failed. Inspect the database target and schema before retrying.");
     process.exit(1);
   })
   .finally(async () => {

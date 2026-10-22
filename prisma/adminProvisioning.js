@@ -28,7 +28,7 @@
  *   - upserts the `credential` row in `neon_auth."account"` with a freshly
  *     generated scrypt hash (`salt:hex`, N=16384 r=16 p=1 dkLen=64) — exactly
  *     the format verified by `@better-auth/utils/password` at sign-in time
- *   - upserts the application profile in `aurena."User"` with role ADMIN
+ *   - upserts the application profile in `public."User"` with role ADMIN
  *   - reads everything back and re-verifies the password with the same
  *     `verifyPassword` used by the login route
  *
@@ -41,7 +41,6 @@
  */
 const crypto = require("crypto");
 const { hashPassword, verifyPassword } = require("@better-auth/utils/password");
-const { NEON_AUTH_DDL } = require("./neonAuthDdl");
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -88,12 +87,6 @@ function assertValidPassword(password) {
     throw new Error(
       "INITIAL_ADMIN_PASSWORD must contain at least one uppercase letter, one lowercase letter and one number."
     );
-  }
-}
-
-async function ensureNeonAuthTables(prisma) {
-  for (const statement of NEON_AUTH_DDL) {
-    await prisma.$executeRawUnsafe(statement);
   }
 }
 
@@ -161,7 +154,7 @@ async function inspectAdmin(prisma, email) {
       const stored = typeof account.password === "string" ? account.password : "";
       if (!stored) {
         summary.passwordHashFormat = "empty";
-      } else if (/^[0-9a-f]+:[0-9a-f]+$/i.test(stored)) {
+      } else if (/^[0-9a-f]{32}:[0-9a-f]{128}$/i.test(stored)) {
         summary.passwordHashFormat = "scrypt-salt-hex";
       } else {
         // Never expose the hash itself, only whether it is understood.
@@ -229,8 +222,9 @@ async function provisionAdmin(prisma, options = {}) {
   assertValidEmail(normalizedEmail);
   assertValidPassword(password);
 
-  await ensureNeonAuthTables(prisma);
-
+  // The operator must inspect the target and the CLI must pass its read-only
+  // schema preflight before calling this function. Never create auth tables
+  // (or pretend that a managed provider shares this database).
   const appUserBefore = await prisma.user.findUnique({
     where: { email: normalizedEmail }
   });
@@ -245,17 +239,26 @@ async function provisionAdmin(prisma, options = {}) {
   let sessionsRevoked = 0;
 
   await prisma.$transaction(async (tx) => {
+    const matchingAuthUsers = await tx.$queryRaw`
+      SELECT COUNT(*)::int AS count FROM "neon_auth"."user"
+      WHERE LOWER("email") = ${normalizedEmail}
+    `;
+    if (matchingAuthUsers[0].count > 1) {
+      throw new Error("Multiple auth users share the admin email; investigate before resetting.");
+    }
     const existingAuth = await findAuthUser(tx, normalizedEmail);
 
     if (existingAuth) {
-      await tx.$executeRaw`
-        UPDATE "neon_auth"."user"
-        SET "emailVerified" = TRUE,
-            "banned" = FALSE,
-            "updatedAt" = NOW()
-        WHERE "id" = ${String(existingAuth.id)}::uuid
-      `;
+      if (existingAuth.banned) {
+        throw new Error("Auth user is banned; investigate before resetting an administrator.");
+      }
+      if (appUserBefore && String(appUserBefore.authId) !== String(existingAuth.id)) {
+        throw new Error("Admin profile/auth identity mismatch; reconcile manually before reset.");
+      }
     } else {
+      if (appUserBefore) {
+        throw new Error("Admin profile has no matching auth user; reconcile manually before reset.");
+      }
       createdAuthUser = true;
       await tx.$executeRaw`
         INSERT INTO "neon_auth"."user" (
@@ -273,8 +276,22 @@ async function provisionAdmin(prisma, options = {}) {
       ? String(existingAuth.id)
       : authUserId;
 
+    const conflictingProfile = await tx.user.findUnique({ where: { authId: resolvedAuthUserId } });
+    if (conflictingProfile && conflictingProfile.email !== normalizedEmail) {
+      throw new Error("Auth identity belongs to another application profile; refusing to relink.");
+    }
+    const accountCounts = await tx.$queryRaw`
+      SELECT COUNT(*)::int AS count FROM "neon_auth"."account"
+      WHERE "userId" = ${resolvedAuthUserId}::uuid AND "providerId" = 'credential'
+    `;
+    if (accountCounts[0].count > 1) {
+      throw new Error("Multiple credential accounts found; investigate before resetting.");
+    }
     const existingAccount = await findCredentialAccount(tx, resolvedAuthUserId);
     if (existingAccount) {
+      if (existingAccount.password && !/^[0-9a-f]{32}:[0-9a-f]{128}$/i.test(existingAccount.password)) {
+        throw new Error("Auth credential format is unsupported; reset through the provider instead.");
+      }
       await tx.$executeRaw`
         UPDATE "neon_auth"."account"
         SET "password" = ${passwordHash}, "updatedAt" = NOW()
@@ -299,10 +316,13 @@ async function provisionAdmin(prisma, options = {}) {
     // Resolve the mobile number without ever stealing one from another user.
     let resolvedMobile;
     if (mobile) {
+      if (!/^[6-9]\d{9}$/.test(mobile)) {
+        throw new Error("INITIAL_ADMIN_MOBILE must be a normalized 10-digit Indian mobile number.");
+      }
       const mobileOwner = await tx.user.findUnique({ where: { mobile } });
       if (mobileOwner && mobileOwner.email !== normalizedEmail) {
         warnings.push(
-          `Mobile number ${mobile} already belongs to another account; the administrator was saved without changing it.`
+          "Mobile number already belongs to another account; administrator mobile was not changed."
         );
       } else {
         resolvedMobile = mobile;
@@ -310,6 +330,9 @@ async function provisionAdmin(prisma, options = {}) {
     }
 
     if (appUserBefore) {
+      if (appUserBefore.deletedAt || !appUserBefore.active) {
+        throw new Error("Admin profile is inactive or deleted; investigate before reactivation.");
+      }
       await tx.user.update({
         where: { id: appUserBefore.id },
         data: {
@@ -335,7 +358,7 @@ async function provisionAdmin(prisma, options = {}) {
       });
     }
 
-    if (revokeSessions) {
+    if (revokeSessions && !passwordWasCreated) {
       sessionsRevoked = await tx.$executeRaw`
         DELETE FROM "neon_auth"."session"
         WHERE "userId" = ${resolvedAuthUserId}::uuid
@@ -411,7 +434,6 @@ module.exports = {
   assertValidEmail,
   assertValidPassword,
   describeDatabaseTarget,
-  ensureNeonAuthTables,
   inspectAdmin,
   normalizeEmail,
   provisionAdmin,

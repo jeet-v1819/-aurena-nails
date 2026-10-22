@@ -231,10 +231,9 @@ export async function loginUser(
       );
     }
 
-    // Operational diagnostics only — the response is unchanged, and no
-    // password, hash or token is ever logged. This distinguishes "wrong
-    // password" from "the account has no credential row / password", which is
-    // the state a failed or skipped administrator seed leaves behind.
+    // Local database diagnostics only; a hosted Neon Auth endpoint might
+    // use another database, so presence of a credential never proves a
+    // password mismatch. No secrets are logged or returned.
     if (preloadedUser?.authId) {
       try {
         const credentialRows = await prisma.$queryRaw`
@@ -251,7 +250,7 @@ export async function loginUser(
 
         console.warn(
           hasUsablePassword
-            ? "[auth] Credential sign-in rejected by the auth provider (password mismatch)"
+            ? "[auth] Credential sign-in rejected (local credential exists; check provider target/password)"
             : "[auth] Credential sign-in rejected because no password is stored for this account",
           {
             appRole: preloadedUser.role,
@@ -280,11 +279,18 @@ export async function loginUser(
     );
   }
 
-  if (signInData.token) {
-    await setAuthSessionCookies(
-      signInData.token,
-      parsed.rememberMe ? 60 * 60 * 24 * 7 : 60 * 60 * 24
-    );
+  if (String(signInData.user.email || "").trim().toLowerCase() !== targetEmail) {
+    await auth.signOut({}).catch(() => {});
+    await clearAuthSessionCookies();
+    throw new AppError("Account identity could not be verified.", 403, "IDENTITY_MISMATCH");
+  }
+
+  // Never attach an existing profile (especially ADMIN) to a different auth
+  // identity merely because the provider returned the same email address.
+  if (preloadedUser && String(preloadedUser.authId) !== String(signInData.user.id)) {
+    await auth.signOut({}).catch(() => {});
+    await clearAuthSessionCookies();
+    throw new AppError("Account identity could not be verified.", 403, "IDENTITY_MISMATCH");
   }
 
   let appUser =
@@ -292,6 +298,12 @@ export async function loginUser(
     (await prisma.user.findUnique({
       where: { authId: signInData.user.id }
     }));
+
+  if (!appUser && requireAdminRole) {
+    await auth.signOut({}).catch(() => {});
+    await clearAuthSessionCookies();
+    throw new AppError("Invalid email/mobile number or password.", 401, "INVALID_CREDENTIALS");
+  }
 
   if (!appUser) {
     const nameParts = String(signInData.user.name || "Aurena Guest")
@@ -324,7 +336,6 @@ export async function loginUser(
     appUser = await prisma.user.update({
       where: { id: appUser.id },
       data: {
-        authId: signInData.user.id,
         lastLoginAt: new Date()
       }
     });
@@ -337,6 +348,14 @@ export async function loginUser(
       "Forbidden: Administrator credentials are required to access the admin portal.",
       403,
       "FORBIDDEN"
+    );
+  }
+
+  // Persist a fallback token only after identity and role checks succeed.
+  if (signInData.token) {
+    await setAuthSessionCookies(
+      signInData.token,
+      parsed.rememberMe ? 60 * 60 * 24 * 7 : 60 * 60 * 24
     );
   }
 

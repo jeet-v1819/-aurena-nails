@@ -25,7 +25,7 @@ const migrationPath = path.join(
 const checkRes = await db.query(`
   SELECT EXISTS (
     SELECT 1 FROM information_schema.tables
-    WHERE table_schema = 'aurena' AND table_name = 'User'
+    WHERE table_schema = 'public' AND table_name = 'User'
   ) AS "exists"
 `);
 

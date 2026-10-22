@@ -1,167 +1,62 @@
-# Admin login — root cause, fix and production runbook
+# Admin login: production investigation and recovery
 
-Live site: <https://aurena-nails.netlify.app/admin/login>
+**Status:** The live password and Neon project have NOT been verified from this repository checkout. The reported 401 means the sign-in provider rejected the credential; it does **not** establish whether the auth user is missing, the password is wrong, the provider points elsewhere, or the stored format is incompatible. A role failure would normally return 403. Do not treat an old local seed result as proof of production state.
 
-## Symptom
+## What the code does
 
-`/admin/login` returns **"Invalid email/mobile number or password"** for
-`admin@aurenanails.com` even though the expected password is correct.
+`/admin/login` POSTs `{identifier,password,rememberMe}` to `/api/auth/admin-login` → `loginUser()` (`services/authService.js`). Email is trimmed/lowercased; Indian mobiles are normalized to ten digits and looked up in `public."User"`. The password is checked by the configured Neon Auth endpoint (`NEON_AUTH_BASE_URL`, or the in-app `/api/neon-auth` endpoint using `neon_auth."account"` and Better Auth's scrypt verification). After successful authentication the app loads the profile, requires `active=true`, `deletedAt=null`, matching `authId` and `role=ADMIN`; session cookies are set only after those checks. The layout and admin APIs verify the session again.
 
-## Root cause
+The prior repo instead targeted `aurena` for **every** Prisma query, including rate limits, users, services and appointments. The reported production database has application tables under `public`, so an `aurena.User` provisioning query cannot update the live application. The repository migration `20261014080000_aurena_initial` also differs from the reported production history `20260101000000_init`. We changed the Prisma model and adapter target to `public`, and the initial SQL **for fresh test databases only**. We have NOT migrated or altered any production table or reconciled its migration ledger. Never run `prisma migrate deploy`, `migrate dev`, `db push`, `db:seed`, or that baseline SQL on production: it may create duplicates or fail on existing objects. Keep production migration history as-is until an operator compares the actual DDL/checksum with the repository; any future migration must be a separate reviewed change.
 
-The password check was never the problem — the administrator's **Neon Auth
-credential was never (re)written**.
+## 1. Inspect production without writes
 
-`/api/auth/admin-login` → `loginUser()` does two things:
-
-1. looks up the application profile in `aurena."User"` to find the role, then
-2. verifies the password through Neon Auth (`POST {NEON_AUTH_BASE_URL}/sign-in/email`).
-
-A 401 with the exact message in the report is produced only by step 2. If the
-role were wrong the API would answer **403**, and if the app profile were
-missing the API would answer **401 without a role**, but the account still has
-to exist in Neon Auth.
-
-The old `prisma/seed.js` created the admin like this:
-
-```js
-fetch(`${NEON_AUTH_BASE_URL}/sign-up/email`, { ...credentials... })
-// on failure: look up the existing neon_auth user id and move on
-```
-
-That has three failure modes, all of which leave the application profile with
-`role = ADMIN` while the auth credential is missing, empty or holds an older
-password:
-
-| # | Situation | Old seed behaviour | Result |
-|---|-----------|-------------------|--------|
-| 1 | Admin already exists in `neon_auth` (second run, password rotation, imported account, earlier partial seed) | Sign-up returns `422 User already exists`; seed only links `authId` and grants `ADMIN` | Password **never updated**, login keeps failing while the seed prints "verified with ADMIN role" |
-| 2 | `NEON_AUTH_BASE_URL` unset — exactly what `.env.example` recommends for production (the in-app `/api/neon-auth` endpoint) | Entire admin block **skipped silently** | No administrator and no credential at all |
-| 3 | Seed machine cannot reach the deployed site | `fetch` throws / returns non-OK | Only the app profile gets created; no usable password |
-
-Both failure modes were reproduced locally against a real PostgreSQL database:
-after corrupting the credential, re-running the documented seed command still
-returned `401 INVALID_CREDENTIALS` *while reporting success*. That is the bug.
-
-Nothing in the request path (email lookup, role check, cookie/session
-handling, redirects) needed to be weakened — no password verification was
-bypassed and no debug bypass was added.
-
-## The fix
-
-* `prisma/adminProvisioning.js` (new) — deterministic, idempotent
-  provision/reset against the real Neon database:
-  * upserts `neon_auth."user"`
-  * upserts the `credential` row in `neon_auth."account"` with a fresh
-    `@better-auth/utils/password` scrypt hash (`salt:hex`, N=16384 r=16 p=1
-    dkLen=64) — the identical format the login route verifies and the one the
-    app's own password-reset flow already writes
-  * upserts `aurena."User"` with `role = ADMIN`, `active = true`
-  * reads everything back and **re-verifies the password** with the same
-    `verifyPassword()` used at sign-in
-  * never deletes users or application data (only the admin's own auth
-    sessions, and only when `revokeSessions` is enabled)
-* `prisma/seed.js` — administrator provisioning no longer needs
-  `NEON_AUTH_BASE_URL` or a reachable deployment, and **fails loudly** if the
-  password cannot be verified instead of printing a success message.
-* `scripts/provision-admin.js` (new) — check/apply CLI, plus optional live
-  verification through the public login API.
-* `services/authService.js` — when a credential sign-in is rejected, the server
-  now logs (without secrets) whether a credential row/password exists and
-  whether the admin portal was targeted. The HTTP response is unchanged.
-* `app/admin/layout.jsx` — a signed-in customer hitting `/admin/*` is now
-  redirected to `/forbidden` instead of receiving a rendered 200 page, so
-  automated checks can tell "denied" from "allowed".
-
-## Production runbook
-
-All commands are safe to repeat. They never truncate or drop data.
-
-### 1. Inspect the current production state (read-only)
+From a secure operator shell, using the **same** Neon project/branch/database as Netlify `DATABASE_URL` (pooled connection with SSL):
 
 ```bash
-DATABASE_URL='<Neon pooled connection string>' \
-INITIAL_ADMIN_EMAIL='admin@aurenanails.com' \
-INITIAL_ADMIN_PASSWORD='<current password to test>' \
-node scripts/provision-admin.js --check
+# Set DATABASE_URL securely in your shell or CI secret store (do not paste it into logs/chat).
+node scripts/prisma-generate.js
+node scripts/inspect-production-db.js
+INITIAL_ADMIN_EMAIL='admin@aurenanails.com' node scripts/provision-admin.js --check
 ```
 
-`--check` performs no writes. It reports whether the `neon_auth` user, the
-credential row, the password format, the `ADMIN` role and the `authId` link
-exist, and whether the supplied password matches. It prints the database
-host/database name but **never** the connection string, password or hash.
-
-### 2. Create or reset the administrator
+`inspect-production-db.js` reports the target hostname/database, all existing application/auth table and column types, indexes, constraints, enums and `_prisma_migrations` rows, and fails when modeled fields are missing. No contents of customer records, password hashes or URLs are printed. Inspect **all** differences and constraints, not just the presence of `public.User`. The `--check` script also reports whether the auth user, credential, app role, active state and IDs match. To check the supplied password without echoing it or putting it in shell history:
 
 ```bash
-DATABASE_URL='<Neon pooled connection string>' \
-INITIAL_ADMIN_EMAIL='admin@aurenanails.com' \
-INITIAL_ADMIN_MOBILE='9876543210' \
-INITIAL_ADMIN_PASSWORD='<strong password: 8-128 chars, upper+lower+digit>' \
-node scripts/provision-admin.js --apply --verify-live
+read -rsp 'Admin password to verify: ' INITIAL_ADMIN_PASSWORD; echo
+export INITIAL_ADMIN_PASSWORD
+INITIAL_ADMIN_EMAIL='admin@aurenanails.com' node scripts/provision-admin.js --check
 ```
 
-* Use the **pooled** `DATABASE_URL` (`...-pooler...`, `sslmode=require`).
-* `--apply` creates the Neon Auth user if needed, writes/resets the credential
-  password, guarantees `role = ADMIN` / `active = true` in `aurena."User"`, and
-  revokes the admin's old sessions (use `--keep-sessions` to skip).
-* `--verify-live` then POSTs the credentials to
-  `${NEXT_PUBLIC_APP_URL}/api/auth/admin-login` and requires `200` with
-  `role = ADMIN`. Set `NEXT_PUBLIC_APP_URL=https://aurena-nails.netlify.app`.
-* Equivalent seed form (also seeds catalogue/content data):
+Compare the inspected hostname/database, Neon branch/project and `NEON_AUTH_BASE_URL` with **Netlify Site configuration → Environment variables** for the production deploy (not just the local env or a preview context). Verify `AUTH_SECRET` is set, `NEXT_PUBLIC_APP_URL=https://aurena-nails.netlify.app`, and Netlify's published deploy commit is the expected `main` commit. Hosted Neon Auth may own a different database: in that case this CLI's direct password reset is not valid; use that provider's supported password reset in its own project and link the verified auth ID to the application profile only after explicit review. Do not infer that the two targets match just because their email addresses do.
 
-  ```bash
-  DATABASE_URL='...' \
-  INITIAL_ADMIN_EMAIL='admin@aurenanails.com' \
-  INITIAL_ADMIN_PASSWORD='<password>' \
-  node prisma/seed.js
-  ```
+## 2. Provision/reset only after the preflight passes
 
-The password is read from the environment — never pass it as a CLI flag and
-never add it to `.env.example`, a workflow file or a commit.
-
-### 3. Verify the live acceptance criteria
+Only when the actual target has been explicitly checked, schema and provider format are compatible, the auth user is not banned, and any existing IDs match:
 
 ```bash
-BASE_URL='https://aurena-nails.netlify.app' \
-AUTH_TEST_ADMIN_EMAIL='admin@aurenanails.com' \
-AUTH_TEST_ADMIN_PASSWORD='<password>' \
+# Password is still held in the shell environment from the read step above.
+export INITIAL_ADMIN_EMAIL='admin@aurenanails.com'
+export INITIAL_ADMIN_MOBILE='9876543210' # optional; leave unset if owned by another account
+export CONFIRM_DATABASE_TARGET='<host>/<database>' # exactly as printed in the preflight error
+node scripts/provision-admin.js --apply
+unset INITIAL_ADMIN_PASSWORD
+```
+
+The CLI refuses writes without a matching `CONFIRM_DATABASE_TARGET`, the full schema preflight, or when an external `NEON_AUTH_BASE_URL` is configured. It uses Better Auth's `hashPassword` and verifies with `verifyPassword`; a reset revokes **only that admin's** old sessions by default (`--keep-sessions` overrides). If the account is missing, it creates one auth user, one credential account and one app profile. If the profile/auth ID conflicts or the account is inactive/deleted/banned, it stops for manual investigation instead of silently reassociating/re-enabling an identity. Repeating it does not create duplicate profiles. Avoid the publicly shared example password in future: rotate to a new unique password after confirming the intended account.
+
+## 3. Verify live (after the code is deployed)
+
+Use the project's GitHub `main` → Netlify deployment workflow after CI and review. Production deploy must **not** automatically run migrations or seeds. Check Netlify deploy logs and the published commit and environment context. Then (secure shell, re-enter password via `read -rsp`):
+
+```bash
+export BASE_URL='https://aurena-nails.netlify.app'
+export AUTH_TEST_ADMIN_EMAIL='admin@aurenanails.com'
+read -rsp 'Admin password: ' AUTH_TEST_ADMIN_PASSWORD; echo
+export AUTH_TEST_ADMIN_PASSWORD
 node scripts/verify-auth-flows.js
+unset AUTH_TEST_ADMIN_PASSWORD
 ```
 
-This checks: admin login 200 + `role=ADMIN`, valid admin session, dashboard
-renders, wrong password 401, customer login still works, customer denied on
-`/api/auth/admin-login` (403), `/api/admin/*` (403) and `/admin/dashboard`
-(redirect to `/forbidden`), and logout invalidation.
+This checks HTTP admin login, session reuse/navigation, admin API and dashboard, wrong password, customer registration/login and admin denial. It **creates a dedicated QA customer** if missing. On production, obtain approval for that write first; alternatively verify with an existing authorized customer via the browser. Check customer/appointment/service row counts before and after via the read-only database and verify existing data was not changed. Do not claim live acceptance before testing the deployed site and a refresh in a browser. Never print/store cookies or hashes.
 
-For the full production smoke test:
-
-```bash
-SMOKE_BASE_URL='https://aurena-nails.netlify.app' \
-SMOKE_ADMIN_EMAIL='admin@aurenanails.com' \
-SMOKE_ADMIN_PASSWORD='<password>' \
-node scripts/live-smoke.mjs
-```
-
-### 4. Environment checklist (Netlify)
-
-| Variable | Expected value |
-|----------|----------------|
-| `DATABASE_URL` | Neon **pooled** PostgreSQL URL, `sslmode=require` |
-| `AUTH_SECRET` | 32+ random characters (`openssl rand -base64 32`) |
-| `NEXT_PUBLIC_APP_URL` | `https://aurena-nails.netlify.app` |
-| `NEON_AUTH_BASE_URL` | Empty (built-in endpoint) **or** the hosted Neon Auth URL. It must be the same provider that the provisioning step wrote to. |
-
-If a hosted Neon Auth endpoint is configured, it owns its `neon_auth` tables.
-`provision-admin.js` writes to the database named by `DATABASE_URL`; if that is
-a different database from the managed auth service, `--verify-live` will fail
-and you should reset the password through Neon's console instead of the DB.
-
-## Guarantees
-
-* No password verification is skipped, weakened or bypassed.
-* `admin-login` still returns `401` for a wrong password and `403` for a
-  non-admin account.
-* Customer accounts remain `CUSTOMER` and are denied the admin portal.
-* No secrets are committed: `.env.example` holds placeholders only, and the
-  lifecycle scripts read credentials from the environment.
+If the preflight fails because production columns differ, **stop**: adjust the Prisma schema to the observed production columns and test on a sanitized copy before deploying. Do not provision, migrate, or create parallel tables to silence the error.

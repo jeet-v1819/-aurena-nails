@@ -19,7 +19,7 @@ const pool = new Pool({
 });
 
 const prisma = new PrismaClient({
-  adapter: new PrismaPg(pool, { schema: "aurena" })
+  adapter: new PrismaPg(pool, { schema: "public" })
 });
 
 const TEST_PREFIX = "aurena-pw-suite-";

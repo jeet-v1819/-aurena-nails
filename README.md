@@ -4,7 +4,7 @@ Luxury nail studio site with a customer portal, booking flow and an
 administrator management portal.
 
 * Framework: Next.js 14 (App Router, **JavaScript only** — `.js` / `.jsx`)
-* Database: Neon PostgreSQL + Prisma ORM (`aurena` schema) with `@prisma/adapter-pg`
+* Database: Neon PostgreSQL + Prisma ORM (application tables in `public`) with `@prisma/adapter-pg`
 * Auth: Neon Auth (managed endpoint or the app's built-in `/api/neon-auth`
   compatible endpoint) with a `neon_auth` schema in the same database
 
@@ -14,26 +14,30 @@ administrator management portal.
 npm install --legacy-peer-deps
 cp .env.example .env.local     # then fill in the placeholders
 node scripts/prisma-generate.js
-npx prisma migrate deploy
+# On a NEW EMPTY local database only; never run this baseline on production.
+npm run db:deploy
 npm run db:seed
 npm run dev
 ```
 
 ## Administrator account
 
-Provisioning is idempotent: it creates the administrator if missing and resets
-the password + `ADMIN` role if it already exists.
+Production uses `public` application tables and `neon_auth` auth tables. Do not
+assume the reported password exists in Neon. The committed initial migration
+is for **fresh databases only**; production has a different migration history.
+Before any writes, inspect the real target, schema, auth provider, and account:
 
 ```bash
-DATABASE_URL='postgresql://...' \
-INITIAL_ADMIN_EMAIL='admin@aurenanails.com' \
-INITIAL_ADMIN_PASSWORD='<strong password>' \
-node scripts/provision-admin.js --apply
+node scripts/inspect-production-db.js
+INITIAL_ADMIN_EMAIL=admin@aurenanails.com node scripts/provision-admin.js --check
 ```
 
-See [docs/admin-login-runbook.md](docs/admin-login-runbook.md) for the root
-cause of the production admin-login failure, the full production runbook and
-the verification commands.
+Only after the preflight and Netlify provider/target comparison, use
+`CONFIRM_DATABASE_TARGET=<host>/<database> node scripts/provision-admin.js --apply`
+with the email and password supplied securely through environment variables.
+See [docs/admin-login-runbook.md](docs/admin-login-runbook.md) for precise
+commands, warnings and live verification. Do not run `db:seed` to reset an
+administrator or `db:deploy` against the existing production database.
 
 ## Tests
 
