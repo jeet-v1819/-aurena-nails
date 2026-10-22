@@ -11,7 +11,10 @@ const { execFileSync } = require('child_process');
     const { rows } = await pool.query(`
       SELECT table_schema, table_name FROM information_schema.tables
       WHERE table_schema IN ('public', 'aurena')
-        AND (table_name IN ('User', 'Service', 'Appointment', 'WebsiteContent', '_prisma_migrations'))
+      UNION ALL
+      SELECT n.nspname, t.typname FROM pg_type t
+      JOIN pg_namespace n ON n.oid = t.typnamespace
+      WHERE n.nspname IN ('public', 'aurena') AND t.typtype = 'e' 
     `);
     if (rows.length) {
       throw new Error('Existing application tables or migration history detected. Refusing to apply a fresh baseline.');
