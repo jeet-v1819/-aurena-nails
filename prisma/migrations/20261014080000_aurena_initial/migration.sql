@@ -1,14 +1,16 @@
 -- CreateSchema
-CREATE SCHEMA IF NOT EXISTS "aurena";
+-- Fresh databases only. Production already has public tables and a different
+-- migration history; never run this baseline against an existing database.
+CREATE SCHEMA IF NOT EXISTS "public";
 
 -- CreateEnum
-CREATE TYPE "aurena"."Role" AS ENUM ('ADMIN', 'CUSTOMER');
+CREATE TYPE "public"."Role" AS ENUM ('ADMIN', 'CUSTOMER');
 
 -- CreateEnum
-CREATE TYPE "aurena"."AppointmentStatus" AS ENUM ('PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'REJECTED');
+CREATE TYPE "public"."AppointmentStatus" AS ENUM ('PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'REJECTED');
 
 -- CreateTable
-CREATE TABLE "aurena"."User" (
+CREATE TABLE "public"."User" (
     "id" TEXT NOT NULL,
     "authId" TEXT NOT NULL,
     "email" TEXT NOT NULL,
@@ -16,7 +18,7 @@ CREATE TABLE "aurena"."User" (
     "lastName" TEXT NOT NULL DEFAULT '',
     "mobile" TEXT,
     "image" TEXT,
-    "role" "aurena"."Role" NOT NULL DEFAULT 'CUSTOMER',
+    "role" "public"."Role" NOT NULL DEFAULT 'CUSTOMER',
     "active" BOOLEAN NOT NULL DEFAULT true,
     "deletedAt" TIMESTAMP(3),
     "lastLoginAt" TIMESTAMP(3),
@@ -27,7 +29,7 @@ CREATE TABLE "aurena"."User" (
 );
 
 -- CreateTable
-CREATE TABLE "aurena"."PasswordResetToken" (
+CREATE TABLE "public"."PasswordResetToken" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "tokenHash" TEXT NOT NULL,
@@ -39,7 +41,7 @@ CREATE TABLE "aurena"."PasswordResetToken" (
 );
 
 -- CreateTable
-CREATE TABLE "aurena"."GalleryCategory" (
+CREATE TABLE "public"."GalleryCategory" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "slug" TEXT NOT NULL,
@@ -53,7 +55,7 @@ CREATE TABLE "aurena"."GalleryCategory" (
 );
 
 -- CreateTable
-CREATE TABLE "aurena"."Service" (
+CREATE TABLE "public"."Service" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "slug" TEXT NOT NULL,
@@ -81,7 +83,7 @@ CREATE TABLE "aurena"."Service" (
 );
 
 -- CreateTable
-CREATE TABLE "aurena"."ServiceImage" (
+CREATE TABLE "public"."ServiceImage" (
     "id" TEXT NOT NULL,
     "serviceId" TEXT NOT NULL,
     "url" TEXT NOT NULL,
@@ -95,7 +97,7 @@ CREATE TABLE "aurena"."ServiceImage" (
 );
 
 -- CreateTable
-CREATE TABLE "aurena"."ServiceVideo" (
+CREATE TABLE "public"."ServiceVideo" (
     "serviceId" TEXT NOT NULL,
     "videoId" TEXT NOT NULL,
 
@@ -103,7 +105,7 @@ CREATE TABLE "aurena"."ServiceVideo" (
 );
 
 -- CreateTable
-CREATE TABLE "aurena"."GalleryImage" (
+CREATE TABLE "public"."GalleryImage" (
     "id" TEXT NOT NULL,
     "title" TEXT NOT NULL,
     "description" TEXT NOT NULL DEFAULT '',
@@ -124,7 +126,7 @@ CREATE TABLE "aurena"."GalleryImage" (
 );
 
 -- CreateTable
-CREATE TABLE "aurena"."Video" (
+CREATE TABLE "public"."Video" (
     "id" TEXT NOT NULL,
     "title" TEXT NOT NULL,
     "description" TEXT NOT NULL DEFAULT '',
@@ -143,14 +145,14 @@ CREATE TABLE "aurena"."Video" (
 );
 
 -- CreateTable
-CREATE TABLE "aurena"."Appointment" (
+CREATE TABLE "public"."Appointment" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "serviceId" TEXT NOT NULL,
     "serviceName" TEXT NOT NULL,
     "start" TIMESTAMPTZ(3) NOT NULL,
     "end" TIMESTAMPTZ(3) NOT NULL,
-    "status" "aurena"."AppointmentStatus" NOT NULL DEFAULT 'PENDING',
+    "status" "public"."AppointmentStatus" NOT NULL DEFAULT 'PENDING',
     "note" TEXT NOT NULL DEFAULT '',
     "requestKey" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -160,7 +162,7 @@ CREATE TABLE "aurena"."Appointment" (
 );
 
 -- CreateTable
-CREATE TABLE "aurena"."Wishlist" (
+CREATE TABLE "public"."Wishlist" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "serviceId" TEXT,
@@ -171,7 +173,7 @@ CREATE TABLE "aurena"."Wishlist" (
 );
 
 -- CreateTable
-CREATE TABLE "aurena"."Review" (
+CREATE TABLE "public"."Review" (
     "id" TEXT NOT NULL,
     "appointmentId" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
@@ -188,7 +190,7 @@ CREATE TABLE "aurena"."Review" (
 );
 
 -- CreateTable
-CREATE TABLE "aurena"."ContactMessage" (
+CREATE TABLE "public"."ContactMessage" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "email" TEXT NOT NULL,
@@ -202,7 +204,7 @@ CREATE TABLE "aurena"."ContactMessage" (
 );
 
 -- CreateTable
-CREATE TABLE "aurena"."Notification" (
+CREATE TABLE "public"."Notification" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "title" TEXT NOT NULL,
@@ -215,7 +217,7 @@ CREATE TABLE "aurena"."Notification" (
 );
 
 -- CreateTable
-CREATE TABLE "aurena"."WebsiteContent" (
+CREATE TABLE "public"."WebsiteContent" (
     "key" TEXT NOT NULL,
     "value" JSONB NOT NULL,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -224,7 +226,7 @@ CREATE TABLE "aurena"."WebsiteContent" (
 );
 
 -- CreateTable
-CREATE TABLE "aurena"."BusinessHours" (
+CREATE TABLE "public"."BusinessHours" (
     "weekday" INTEGER NOT NULL,
     "open" TEXT NOT NULL,
     "close" TEXT NOT NULL,
@@ -235,7 +237,7 @@ CREATE TABLE "aurena"."BusinessHours" (
 );
 
 -- CreateTable
-CREATE TABLE "aurena"."Holiday" (
+CREATE TABLE "public"."Holiday" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "date" TEXT NOT NULL,
@@ -248,7 +250,7 @@ CREATE TABLE "aurena"."Holiday" (
 );
 
 -- CreateTable
-CREATE TABLE "aurena"."MediaAsset" (
+CREATE TABLE "public"."MediaAsset" (
     "id" TEXT NOT NULL,
     "publicId" TEXT NOT NULL,
     "url" TEXT NOT NULL,
@@ -266,7 +268,7 @@ CREATE TABLE "aurena"."MediaAsset" (
 );
 
 -- CreateTable
-CREATE TABLE "aurena"."MediaDeletion" (
+CREATE TABLE "public"."MediaDeletion" (
     "id" TEXT NOT NULL,
     "publicId" TEXT NOT NULL,
     "resourceType" TEXT NOT NULL,
@@ -276,7 +278,7 @@ CREATE TABLE "aurena"."MediaDeletion" (
 );
 
 -- CreateTable
-CREATE TABLE "aurena"."AuditLog" (
+CREATE TABLE "public"."AuditLog" (
     "id" TEXT NOT NULL,
     "actorId" TEXT NOT NULL,
     "action" TEXT NOT NULL,
@@ -287,7 +289,7 @@ CREATE TABLE "aurena"."AuditLog" (
 );
 
 -- CreateTable
-CREATE TABLE "aurena"."RateLimit" (
+CREATE TABLE "public"."RateLimit" (
     "key" TEXT NOT NULL,
     "count" INTEGER NOT NULL DEFAULT 1,
     "expiresAt" TIMESTAMP(3) NOT NULL,
@@ -296,163 +298,163 @@ CREATE TABLE "aurena"."RateLimit" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "User_authId_key" ON "aurena"."User"("authId");
+CREATE UNIQUE INDEX "User_authId_key" ON "public"."User"("authId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "User_email_key" ON "aurena"."User"("email");
+CREATE UNIQUE INDEX "User_email_key" ON "public"."User"("email");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "User_mobile_key" ON "aurena"."User"("mobile");
+CREATE UNIQUE INDEX "User_mobile_key" ON "public"."User"("mobile");
 
 -- CreateIndex
-CREATE INDEX "User_role_active_createdAt_idx" ON "aurena"."User"("role", "active", "createdAt");
+CREATE INDEX "User_role_active_createdAt_idx" ON "public"."User"("role", "active", "createdAt");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "PasswordResetToken_tokenHash_key" ON "aurena"."PasswordResetToken"("tokenHash");
+CREATE UNIQUE INDEX "PasswordResetToken_tokenHash_key" ON "public"."PasswordResetToken"("tokenHash");
 
 -- CreateIndex
-CREATE INDEX "PasswordResetToken_userId_expiresAt_idx" ON "aurena"."PasswordResetToken"("userId", "expiresAt");
+CREATE INDEX "PasswordResetToken_userId_expiresAt_idx" ON "public"."PasswordResetToken"("userId", "expiresAt");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "GalleryCategory_slug_key" ON "aurena"."GalleryCategory"("slug");
+CREATE UNIQUE INDEX "GalleryCategory_slug_key" ON "public"."GalleryCategory"("slug");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Service_slug_key" ON "aurena"."Service"("slug");
+CREATE UNIQUE INDEX "Service_slug_key" ON "public"."Service"("slug");
 
 -- CreateIndex
-CREATE INDEX "Service_active_featured_categoryId_idx" ON "aurena"."Service"("active", "featured", "categoryId");
+CREATE INDEX "Service_active_featured_categoryId_idx" ON "public"."Service"("active", "featured", "categoryId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "ServiceImage_publicId_key" ON "aurena"."ServiceImage"("publicId");
+CREATE UNIQUE INDEX "ServiceImage_publicId_key" ON "public"."ServiceImage"("publicId");
 
 -- CreateIndex
-CREATE INDEX "ServiceImage_serviceId_position_idx" ON "aurena"."ServiceImage"("serviceId", "position");
+CREATE INDEX "ServiceImage_serviceId_position_idx" ON "public"."ServiceImage"("serviceId", "position");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "GalleryImage_publicId_key" ON "aurena"."GalleryImage"("publicId");
+CREATE UNIQUE INDEX "GalleryImage_publicId_key" ON "public"."GalleryImage"("publicId");
 
 -- CreateIndex
-CREATE INDEX "GalleryImage_active_categoryId_createdAt_idx" ON "aurena"."GalleryImage"("active", "categoryId", "createdAt");
+CREATE INDEX "GalleryImage_active_categoryId_createdAt_idx" ON "public"."GalleryImage"("active", "categoryId", "createdAt");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Video_publicId_key" ON "aurena"."Video"("publicId");
+CREATE UNIQUE INDEX "Video_publicId_key" ON "public"."Video"("publicId");
 
 -- CreateIndex
-CREATE INDEX "Video_active_categoryId_createdAt_idx" ON "aurena"."Video"("active", "categoryId", "createdAt");
+CREATE INDEX "Video_active_categoryId_createdAt_idx" ON "public"."Video"("active", "categoryId", "createdAt");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Appointment_requestKey_key" ON "aurena"."Appointment"("requestKey");
+CREATE UNIQUE INDEX "Appointment_requestKey_key" ON "public"."Appointment"("requestKey");
 
 -- CreateIndex
-CREATE INDEX "Appointment_status_start_end_idx" ON "aurena"."Appointment"("status", "start", "end");
+CREATE INDEX "Appointment_status_start_end_idx" ON "public"."Appointment"("status", "start", "end");
 
 -- CreateIndex
-CREATE INDEX "Appointment_userId_start_idx" ON "aurena"."Appointment"("userId", "start");
+CREATE INDEX "Appointment_userId_start_idx" ON "public"."Appointment"("userId", "start");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Wishlist_userId_galleryId_key" ON "aurena"."Wishlist"("userId", "galleryId");
+CREATE UNIQUE INDEX "Wishlist_userId_galleryId_key" ON "public"."Wishlist"("userId", "galleryId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Wishlist_userId_serviceId_key" ON "aurena"."Wishlist"("userId", "serviceId");
+CREATE UNIQUE INDEX "Wishlist_userId_serviceId_key" ON "public"."Wishlist"("userId", "serviceId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Review_appointmentId_key" ON "aurena"."Review"("appointmentId");
+CREATE UNIQUE INDEX "Review_appointmentId_key" ON "public"."Review"("appointmentId");
 
 -- CreateIndex
-CREATE INDEX "Review_serviceId_visible_idx" ON "aurena"."Review"("serviceId", "visible");
+CREATE INDEX "Review_serviceId_visible_idx" ON "public"."Review"("serviceId", "visible");
 
 -- CreateIndex
-CREATE INDEX "ContactMessage_read_createdAt_idx" ON "aurena"."ContactMessage"("read", "createdAt");
+CREATE INDEX "ContactMessage_read_createdAt_idx" ON "public"."ContactMessage"("read", "createdAt");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Notification_eventKey_key" ON "aurena"."Notification"("eventKey");
+CREATE UNIQUE INDEX "Notification_eventKey_key" ON "public"."Notification"("eventKey");
 
 -- CreateIndex
-CREATE INDEX "Notification_userId_read_createdAt_idx" ON "aurena"."Notification"("userId", "read", "createdAt");
+CREATE INDEX "Notification_userId_read_createdAt_idx" ON "public"."Notification"("userId", "read", "createdAt");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Holiday_date_key" ON "aurena"."Holiday"("date");
+CREATE UNIQUE INDEX "Holiday_date_key" ON "public"."Holiday"("date");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "MediaAsset_publicId_key" ON "aurena"."MediaAsset"("publicId");
+CREATE UNIQUE INDEX "MediaAsset_publicId_key" ON "public"."MediaAsset"("publicId");
 
 -- CreateIndex
-CREATE INDEX "MediaAsset_ownerId_idx" ON "aurena"."MediaAsset"("ownerId");
+CREATE INDEX "MediaAsset_ownerId_idx" ON "public"."MediaAsset"("ownerId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "MediaDeletion_publicId_key" ON "aurena"."MediaDeletion"("publicId");
+CREATE UNIQUE INDEX "MediaDeletion_publicId_key" ON "public"."MediaDeletion"("publicId");
 
 -- CreateIndex
-CREATE INDEX "AuditLog_createdAt_idx" ON "aurena"."AuditLog"("createdAt");
+CREATE INDEX "AuditLog_createdAt_idx" ON "public"."AuditLog"("createdAt");
 
 -- AddForeignKey
-ALTER TABLE "aurena"."PasswordResetToken" ADD CONSTRAINT "PasswordResetToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "aurena"."User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."PasswordResetToken" ADD CONSTRAINT "PasswordResetToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "aurena"."Service" ADD CONSTRAINT "Service_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "aurena"."GalleryCategory"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "public"."Service" ADD CONSTRAINT "Service_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "public"."GalleryCategory"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "aurena"."ServiceImage" ADD CONSTRAINT "ServiceImage_serviceId_fkey" FOREIGN KEY ("serviceId") REFERENCES "aurena"."Service"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."ServiceImage" ADD CONSTRAINT "ServiceImage_serviceId_fkey" FOREIGN KEY ("serviceId") REFERENCES "public"."Service"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "aurena"."ServiceVideo" ADD CONSTRAINT "ServiceVideo_serviceId_fkey" FOREIGN KEY ("serviceId") REFERENCES "aurena"."Service"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."ServiceVideo" ADD CONSTRAINT "ServiceVideo_serviceId_fkey" FOREIGN KEY ("serviceId") REFERENCES "public"."Service"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "aurena"."ServiceVideo" ADD CONSTRAINT "ServiceVideo_videoId_fkey" FOREIGN KEY ("videoId") REFERENCES "aurena"."Video"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."ServiceVideo" ADD CONSTRAINT "ServiceVideo_videoId_fkey" FOREIGN KEY ("videoId") REFERENCES "public"."Video"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "aurena"."GalleryImage" ADD CONSTRAINT "GalleryImage_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "aurena"."GalleryCategory"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "public"."GalleryImage" ADD CONSTRAINT "GalleryImage_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "public"."GalleryCategory"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "aurena"."Video" ADD CONSTRAINT "Video_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "aurena"."GalleryCategory"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "public"."Video" ADD CONSTRAINT "Video_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "public"."GalleryCategory"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "aurena"."Appointment" ADD CONSTRAINT "Appointment_serviceId_fkey" FOREIGN KEY ("serviceId") REFERENCES "aurena"."Service"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "public"."Appointment" ADD CONSTRAINT "Appointment_serviceId_fkey" FOREIGN KEY ("serviceId") REFERENCES "public"."Service"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "aurena"."Appointment" ADD CONSTRAINT "Appointment_userId_fkey" FOREIGN KEY ("userId") REFERENCES "aurena"."User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "public"."Appointment" ADD CONSTRAINT "Appointment_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "aurena"."Wishlist" ADD CONSTRAINT "Wishlist_galleryId_fkey" FOREIGN KEY ("galleryId") REFERENCES "aurena"."GalleryImage"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."Wishlist" ADD CONSTRAINT "Wishlist_galleryId_fkey" FOREIGN KEY ("galleryId") REFERENCES "public"."GalleryImage"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "aurena"."Wishlist" ADD CONSTRAINT "Wishlist_serviceId_fkey" FOREIGN KEY ("serviceId") REFERENCES "aurena"."Service"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."Wishlist" ADD CONSTRAINT "Wishlist_serviceId_fkey" FOREIGN KEY ("serviceId") REFERENCES "public"."Service"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "aurena"."Wishlist" ADD CONSTRAINT "Wishlist_userId_fkey" FOREIGN KEY ("userId") REFERENCES "aurena"."User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."Wishlist" ADD CONSTRAINT "Wishlist_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "aurena"."Review" ADD CONSTRAINT "Review_appointmentId_fkey" FOREIGN KEY ("appointmentId") REFERENCES "aurena"."Appointment"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "public"."Review" ADD CONSTRAINT "Review_appointmentId_fkey" FOREIGN KEY ("appointmentId") REFERENCES "public"."Appointment"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "aurena"."Review" ADD CONSTRAINT "Review_serviceId_fkey" FOREIGN KEY ("serviceId") REFERENCES "aurena"."Service"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "public"."Review" ADD CONSTRAINT "Review_serviceId_fkey" FOREIGN KEY ("serviceId") REFERENCES "public"."Service"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "aurena"."Review" ADD CONSTRAINT "Review_userId_fkey" FOREIGN KEY ("userId") REFERENCES "aurena"."User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "public"."Review" ADD CONSTRAINT "Review_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "aurena"."Notification" ADD CONSTRAINT "Notification_userId_fkey" FOREIGN KEY ("userId") REFERENCES "aurena"."User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."Notification" ADD CONSTRAINT "Notification_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 
 -- Domain Check & Exclusion Constraints
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 
-ALTER TABLE "aurena"."Appointment"
+ALTER TABLE "public"."Appointment"
   ADD CONSTRAINT "appointment_positive_duration" CHECK ("end" > "start");
 
-ALTER TABLE "aurena"."Appointment"
+ALTER TABLE "public"."Appointment"
   ADD CONSTRAINT "appointment_no_overlap" EXCLUDE USING gist (
     tstzrange("start", "end", '[)') WITH &&
-  ) WHERE ("status" IN ('PENDING'::"aurena"."AppointmentStatus", 'CONFIRMED'::"aurena"."AppointmentStatus"));
+  ) WHERE ("status" IN ('PENDING'::"public"."AppointmentStatus", 'CONFIRMED'::"public"."AppointmentStatus"));
 
-ALTER TABLE "aurena"."BusinessHours"
+ALTER TABLE "public"."BusinessHours"
   ADD CONSTRAINT "weekday_range" CHECK ("weekday" >= 0 AND "weekday" <= 6);
 
-ALTER TABLE "aurena"."Review"
+ALTER TABLE "public"."Review"
   ADD CONSTRAINT "review_rating_range" CHECK ("rating" >= 1 AND "rating" <= 5);
 
-ALTER TABLE "aurena"."Service"
+ALTER TABLE "public"."Service"
   ADD CONSTRAINT "service_duration_price" CHECK ("duration" >= 15 AND "duration" <= 480 AND "startingPrice" >= 0);
 
-ALTER TABLE "aurena"."Wishlist"
+ALTER TABLE "public"."Wishlist"
   ADD CONSTRAINT "wishlist_exactly_one_target" CHECK (("serviceId" IS NULL) <> ("galleryId" IS NULL));

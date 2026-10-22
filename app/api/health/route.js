@@ -26,7 +26,7 @@ export async function GET() {
       const rows = await prisma.$queryRaw`
         SELECT COUNT(*)::int AS "count"
         FROM information_schema.tables
-        WHERE table_schema = 'aurena'
+        WHERE table_schema = 'public'
           AND table_name IN ('User', 'WebsiteContent', 'Service', 'Appointment')
       `;
       database.schemaReady = Number(rows?.[0]?.count || 0) >= 4;

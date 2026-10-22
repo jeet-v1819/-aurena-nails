@@ -6,14 +6,14 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  schemas  = ["aurena"]
+  schemas  = ["public"]
 }
 
 enum Role {
   ADMIN
   CUSTOMER
 
-  @@schema("aurena")
+  @@schema("public")
 }
 
 enum AppointmentStatus {
@@ -23,7 +23,7 @@ enum AppointmentStatus {
   CANCELLED
   REJECTED
 
-  @@schema("aurena")
+  @@schema("public")
 }
 
 model User {
@@ -47,7 +47,7 @@ model User {
   passwordResetTokens PasswordResetToken[]
 
   @@index([role, active, createdAt])
-  @@schema("aurena")
+  @@schema("public")
 }
 
 model PasswordResetToken {
@@ -60,7 +60,7 @@ model PasswordResetToken {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, expiresAt])
-  @@schema("aurena")
+  @@schema("public")
 }
 
 model GalleryCategory {
@@ -76,7 +76,7 @@ model GalleryCategory {
   services      Service[]
   videos        Video[]
 
-  @@schema("aurena")
+  @@schema("public")
 }
 
 model Service {
@@ -110,7 +110,7 @@ model Service {
   wishlists        Wishlist[]
 
   @@index([active, featured, categoryId])
-  @@schema("aurena")
+  @@schema("public")
 }
 
 model ServiceImage {
@@ -125,7 +125,7 @@ model ServiceImage {
   service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
   @@index([serviceId, position])
-  @@schema("aurena")
+  @@schema("public")
 }
 
 model ServiceVideo {
@@ -135,7 +135,7 @@ model ServiceVideo {
   video     Video   @relation(fields: [videoId], references: [id], onDelete: Cascade)
 
   @@id([serviceId, videoId])
-  @@schema("aurena")
+  @@schema("public")
 }
 
 model GalleryImage {
@@ -158,7 +158,7 @@ model GalleryImage {
   wishlists   Wishlist[]
 
   @@index([active, categoryId, createdAt])
-  @@schema("aurena")
+  @@schema("public")
 }
 
 model Video {
@@ -179,7 +179,7 @@ model Video {
   services    ServiceVideo[]
 
   @@index([active, categoryId, createdAt])
-  @@schema("aurena")
+  @@schema("public")
 }
 
 model Appointment {
@@ -200,7 +200,7 @@ model Appointment {
 
   @@index([status, start, end])
   @@index([userId, start])
-  @@schema("aurena")
+  @@schema("public")
 }
 
 model Wishlist {
@@ -215,7 +215,7 @@ model Wishlist {
 
   @@unique([userId, galleryId])
   @@unique([userId, serviceId])
-  @@schema("aurena")
+  @@schema("public")
 }
 
 model Review {
@@ -235,7 +235,7 @@ model Review {
   user          User        @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@index([serviceId, visible])
-  @@schema("aurena")
+  @@schema("public")
 }
 
 model ContactMessage {
@@ -249,7 +249,7 @@ model ContactMessage {
   createdAt DateTime @default(now())
 
   @@index([read, createdAt])
-  @@schema("aurena")
+  @@schema("public")
 }
 
 model Notification {
@@ -263,7 +263,7 @@ model Notification {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, read, createdAt])
-  @@schema("aurena")
+  @@schema("public")
 }
 
 model WebsiteContent {
@@ -271,7 +271,7 @@ model WebsiteContent {
   value     Json
   updatedAt DateTime @updatedAt
 
-  @@schema("aurena")
+  @@schema("public")
 }
 
 model BusinessHours {
@@ -281,7 +281,7 @@ model BusinessHours {
   closed    Boolean  @default(false)
   updatedAt DateTime @updatedAt
 
-  @@schema("aurena")
+  @@schema("public")
 }
 
 model Holiday {
@@ -293,7 +293,7 @@ model Holiday {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@schema("aurena")
+  @@schema("public")
 }
 
 model MediaAsset {
@@ -311,7 +311,7 @@ model MediaAsset {
   createdAt    DateTime @default(now())
 
   @@index([ownerId])
-  @@schema("aurena")
+  @@schema("public")
 }
 
 model MediaDeletion {
@@ -320,7 +320,7 @@ model MediaDeletion {
   resourceType String
   createdAt    DateTime @default(now())
 
-  @@schema("aurena")
+  @@schema("public")
 }
 
 model AuditLog {
@@ -331,7 +331,7 @@ model AuditLog {
   createdAt DateTime @default(now())
 
   @@index([createdAt])
-  @@schema("aurena")
+  @@schema("public")
 }
 
 model RateLimit {
@@ -339,5 +339,5 @@ model RateLimit {
   count     Int      @default(1)
   expiresAt DateTime
 
-  @@schema("aurena")
+  @@schema("public")
 }

@@ -56,6 +56,7 @@ require("dotenv").config({
 const { PrismaClient } = require("@prisma/client");
 const { PrismaPg } = require("@prisma/adapter-pg");
 const { Pool } = require("pg");
+const { inspectSchema } = require("../prisma/schemaPreflight");
 const {
   describeDatabaseTarget,
   inspectAdmin,
@@ -174,16 +175,33 @@ async function main() {
   });
 
   const prisma = new PrismaClient({
-    adapter: new PrismaPg(pool, { schema: "aurena" })
+    adapter: new PrismaPg(pool, { schema: "public" })
   });
 
   let exitCode = 0;
 
   try {
     console.log(`\nAurena Nails administrator ${args.mode === "apply" ? "provisioning" : "status check"}`);
+    const target = new URL(process.env.DATABASE_URL);
+    const targetLabel = `${target.hostname}/${target.pathname.replace(/^\//, "")}`;
     console.log(`  target: ${describeDatabaseTarget(process.env.DATABASE_URL)}`);
-
+    const schema = await inspectSchema(pool);
+    console.log(`  schema check: ${schema.issues.length ? schema.issues.join("; ") : "compatible"}`);
+    console.log(`  migrations: ${schema.migrations.map((m) => `${m.migration_name}:${m.applied ? "applied" : "unfinished"}`).join(", ") || "none"}`);
+    if (schema.issues.length) {
+      console.error("✖ Schema does not match the application. No provisioning was performed.");
+      return 1;
+    }
     if (args.mode === "apply") {
+      if (process.env.CONFIRM_DATABASE_TARGET !== targetLabel) {
+        console.error(`✖ Set CONFIRM_DATABASE_TARGET=${targetLabel} after checking the read-only report. No writes performed.`);
+        return 1;
+      }
+      if (process.env.NEON_AUTH_BASE_URL &&
+          !process.env.NEON_AUTH_BASE_URL.includes("/api/neon-auth")) {
+        console.error("✖ External Neon Auth endpoint configured; verify that it owns this database before using direct credential reset. No writes performed.");
+        return 1;
+      }
       const result = await provisionAdmin(prisma, {
         email,
         password,
@@ -220,7 +238,7 @@ async function main() {
       console.log(`\n${formatReport(summary)}`);
 
       if (!summary.tablesReady) {
-        console.log("  neon_auth schema : missing (run with --apply to create it)");
+        console.log("  neon_auth schema : missing (provisioning cannot run)");
       }
 
       let passwordMatches = null;
@@ -270,6 +288,9 @@ main()
   })
   .catch((error) => {
     // Never echo raw database errors: they can include connection details.
-    console.error(`\n✖ ${error?.message || "Provisioning failed."}`);
+    // Database errors can contain URLs or secrets; show only our known-safe
+    // operational errors. Database internals remain private.
+    const safe = /^(Admin profile|Auth user|Auth identity|Multiple credential|Multiple auth|Auth credential|INITIAL_ADMIN_|Mobile number|Account identity)/.test(error?.message || "");
+    console.error(`\n✖ ${safe ? error.message : "Provisioning failed. Inspect the schema and server-side logs."}`);
     process.exitCode = 1;
   });
