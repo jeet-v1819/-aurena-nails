@@ -2,6 +2,19 @@ import { prisma, serializeService } from "@/lib/prisma";
 import { AppError } from "@/lib/auth";
 import { reviewSchema, reviewUpdateSchema } from "@/validators";
 import { createNotificationOnce } from "@/services/notificationService";
+import { invalidateServiceCache } from "@/services/serviceService";
+import { invalidateAdminDashboardCache } from "@/services/contentService";
+
+const publicReviewsCache = new Map();
+const PUBLIC_REVIEWS_CACHE_TTL_MS = 60 * 1000;
+
+export function invalidateReviewCache() {
+  publicReviewsCache.clear();
+  try {
+    invalidateServiceCache();
+    invalidateAdminDashboardCache();
+  } catch {}
+}
 
 export async function getEligibleCompletedAppointments(userId, serviceId = "") {
   const where = {
@@ -27,12 +40,18 @@ export async function getEligibleCompletedAppointments(userId, serviceId = "") {
 
 export async function listPublicReviews({ serviceId = "", limit = 12 } = {}) {
   const safeLimit = Math.min(50, Math.max(1, Number(limit) || 12));
+  const cacheKey = `rev:${serviceId}:${safeLimit}`;
+  const cached = publicReviewsCache.get(cacheKey);
+  if (cached && Date.now() - cached.time < PUBLIC_REVIEWS_CACHE_TTL_MS) {
+    return cached.data;
+  }
+
   const where = {
     visible: true,
     ...(serviceId ? { serviceId } : {})
   };
 
-  return prisma.review.findMany({
+  const reviews = await prisma.review.findMany({
     where,
     orderBy: { createdAt: "desc" },
     take: safeLimit,
@@ -54,6 +73,9 @@ export async function listPublicReviews({ serviceId = "", limit = 12 } = {}) {
       }
     }
   });
+
+  publicReviewsCache.set(cacheKey, { time: Date.now(), data: reviews });
+  return reviews;
 }
 
 export async function createCustomerReview(user, rawInput) {
@@ -145,6 +167,7 @@ export async function createCustomerReview(user, rawInput) {
     return created;
   });
 
+  invalidateReviewCache();
   return review;
 }
 
@@ -188,6 +211,9 @@ export async function updateCustomerReview(user, reviewId, rawInput) {
       }
     }
   });
+
+  invalidateReviewCache();
+  return updated;
 }
 
 export async function deleteCustomerReview(user, reviewId) {
@@ -205,6 +231,7 @@ export async function deleteCustomerReview(user, reviewId) {
   }
 
   await prisma.review.delete({ where: { id: reviewId } });
+  invalidateReviewCache();
   return { deleted: true };
 }
 
@@ -307,6 +334,9 @@ export async function moderateAdminReview(adminId, reviewId, { visible }) {
 
     return updated;
   });
+
+  invalidateReviewCache();
+  return updated;
 }
 
 export async function deleteAdminReview(adminId, reviewId) {
@@ -326,5 +356,6 @@ export async function deleteAdminReview(adminId, reviewId) {
     });
   });
 
+  invalidateReviewCache();
   return { deleted: true };
 }

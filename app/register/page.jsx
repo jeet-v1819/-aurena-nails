@@ -5,11 +5,13 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useLoading } from "@/hooks/useLoading";
 
 function RegisterFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { setUser, showToast } = useAuth();
+  const { showLoading, hideLoading } = useLoading();
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -26,6 +28,11 @@ function RegisterFormContent() {
     e.preventDefault();
     setError("");
     setSubmitting(true);
+    showLoading({
+      title: "Creating Your Account",
+      message: "Registering your profile with Aurena studio...",
+      badge: "Registration"
+    });
 
     try {
       const res = await fetch("/api/auth/register", {
@@ -44,6 +51,7 @@ function RegisterFormContent() {
 
       const data = await res.json();
       if (!res.ok) {
+        hideLoading();
         setError(data.error || "Unable to complete registration.");
         return;
       }
@@ -59,9 +67,16 @@ function RegisterFormContent() {
         redirectParam && redirectParam.startsWith("/")
           ? redirectParam
           : "/profile";
-      router.push(destination);
-      router.refresh();
+
+      showLoading({
+        title: "Account Created",
+        message: "Welcome! Redirecting to your personal client space...",
+        badge: "Registration Complete"
+      });
+
+      window.location.href = destination;
     } catch {
+      hideLoading();
       setError("Network error while creating account.");
     } finally {
       setSubmitting(false);

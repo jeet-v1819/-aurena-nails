@@ -11,6 +11,7 @@ import {
   AlertCircle
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useLoading } from "@/hooks/useLoading";
 import {
   formatPriceINR,
   formatDuration,
@@ -35,6 +36,7 @@ function BookingContent() {
   const initialServiceId = searchParams.get("serviceId") || "";
 
   const { user, refreshSession, showToast } = useAuth();
+  const { showLoading, hideLoading } = useLoading();
 
   const [services, setServices] = useState([]);
   const [selectedServiceId, setSelectedServiceId] = useState(initialServiceId);
@@ -125,6 +127,12 @@ function BookingContent() {
     }
 
     setSubmitting(true);
+    showLoading({
+      title: "Reserving Appointment",
+      message: "Checking studio availability and securing your booking...",
+      badge: "Bespoke Reservation"
+    });
+
     try {
       const res = await fetch("/api/appointments", {
         method: "POST",
@@ -140,19 +148,27 @@ function BookingContent() {
 
       const data = await res.json();
       if (res.status === 401) {
-        router.push(`/login?redirect=${encodeURIComponent("/booking")}`);
+        showLoading({
+          title: "Sign In Required",
+          message: "Redirecting to sign-in so we can link your booking...",
+          badge: "Client Portal"
+        });
+        window.location.href = `/login?redirect=${encodeURIComponent("/booking")}`;
         return;
       }
 
       if (!res.ok) {
+        hideLoading();
         setError(data.error || "Unable to book appointment.");
         return;
       }
 
+      hideLoading();
       setBookedAppointment(data.appointment);
       showToast("Appointment booked successfully!");
       await refreshSession();
     } catch {
+      hideLoading();
       setError("Network error while booking your appointment.");
     } finally {
       setSubmitting(false);

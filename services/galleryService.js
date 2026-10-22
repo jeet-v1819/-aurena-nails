@@ -3,8 +3,29 @@ import { AppError } from "@/lib/auth";
 import { deleteMediaByPublicId } from "@/lib/cloudinary";
 import { categorySchema, galleryImageSchema } from "@/validators";
 import { slugify } from "@/utils/format";
+import { invalidateAdminDashboardCache } from "@/services/contentService";
+
+const categoryCache = new Map();
+const CATEGORY_CACHE_TTL_MS = 60 * 1000;
+
+const galleryImagesCache = new Map();
+const GALLERY_CACHE_TTL_MS = 60 * 1000;
+
+export function invalidateGalleryCache() {
+  categoryCache.clear();
+  galleryImagesCache.clear();
+  try {
+    invalidateAdminDashboardCache();
+  } catch {}
+}
 
 export async function listCategories({ activeOnly = false } = {}) {
+  const cacheKey = `cat:${activeOnly}`;
+  const cached = categoryCache.get(cacheKey);
+  if (cached && Date.now() - cached.time < CATEGORY_CACHE_TTL_MS) {
+    return cached.data;
+  }
+
   const where = {
     ...(activeOnly ? { active: true } : {}),
     NOT: {
@@ -26,12 +47,15 @@ export async function listCategories({ activeOnly = false } = {}) {
     }
   });
 
-  return categories.map((cat) => ({
+  const result = categories.map((cat) => ({
     ...cat,
     servicesCount: cat._count.services,
     galleryCount: cat._count.galleryImages,
     videosCount: cat._count.videos
   }));
+
+  categoryCache.set(cacheKey, { time: Date.now(), data: result });
+  return result;
 }
 
 export async function listAdminCategories({ search = "" } = {}) {
@@ -99,6 +123,7 @@ export async function createAdminCategory(adminId, rawInput) {
       }
     });
 
+    invalidateGalleryCache();
     return category;
   });
 }
@@ -148,6 +173,7 @@ export async function updateAdminCategory(adminId, categoryId, rawInput) {
       }
     });
 
+    invalidateGalleryCache();
     return updated;
   });
 }
@@ -192,6 +218,7 @@ export async function deleteAdminCategory(adminId, categoryId) {
     });
   });
 
+  invalidateGalleryCache();
   return { deleted: true };
 }
 
@@ -210,6 +237,15 @@ export async function listGalleryImages({
   const safeLimit = Math.min(50, Math.max(1, Number(limit) || 18));
   const skip = (safePage - 1) * safeLimit;
   const q = String(search || "").trim();
+
+  const isCacheable = !q && !style && !occasion && !tag;
+  const cacheKey = isCacheable ? `gal:${category}:${featuredOnly}:${activeOnly}:${safePage}:${safeLimit}` : null;
+  if (cacheKey) {
+    const cached = galleryImagesCache.get(cacheKey);
+    if (cached && Date.now() - cached.time < GALLERY_CACHE_TTL_MS) {
+      return cached.data;
+    }
+  }
 
   const where = {
     ...(activeOnly ? { active: true } : {}),
@@ -254,13 +290,19 @@ export async function listGalleryImages({
     prisma.galleryImage.count({ where })
   ]);
 
-  return {
+  const result = {
     items,
     total,
     page: safePage,
     limit: safeLimit,
     totalPages: Math.max(1, Math.ceil(total / safeLimit))
   };
+
+  if (cacheKey) {
+    galleryImagesCache.set(cacheKey, { time: Date.now(), data: result });
+  }
+
+  return result;
 }
 
 export async function getGalleryImageById(id) {
@@ -317,6 +359,7 @@ export async function createGalleryImage(adminId, rawInput) {
       }
     });
 
+    invalidateGalleryCache();
     return item;
   });
 }
@@ -379,6 +422,7 @@ export async function updateGalleryImage(adminId, id, rawInput) {
     return item;
   });
 
+  invalidateGalleryCache();
   if (oldPublicId) {
     await deleteMediaByPublicId(oldPublicId, "image").catch(() => {});
   }
@@ -407,6 +451,7 @@ export async function reorderGalleryImages(adminId, orderedIds = []) {
     });
   });
 
+  invalidateGalleryCache();
   return { updated: orderedIds.length };
 }
 
@@ -427,6 +472,7 @@ export async function deleteGalleryImage(adminId, id) {
     });
   });
 
+  invalidateGalleryCache();
   if (existing.publicId) {
     await deleteMediaByPublicId(existing.publicId, "image").catch(() => {});
   }

@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 // Read-only preflight: supply DATABASE_URL via environment, never on the CLI.
-require('dotenv').config({ path: '.env.local' });
+const path = require('path');
+require('dotenv').config({
+  path: [path.join(process.cwd(), '.env.local'), path.join(process.cwd(), '.env')]
+});
 const { Pool } = require('pg');
 const { describeDatabaseTarget } = require('../prisma/adminProvisioning');
 const { inspectSchema, summarizeSchema } = require('../prisma/schemaPreflight');

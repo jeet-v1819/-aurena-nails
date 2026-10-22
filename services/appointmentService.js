@@ -10,6 +10,7 @@ import {
   zonedDateTimeToUtc
 } from "@/utils/timezone";
 import { createNotificationOnce } from "@/services/notificationService";
+import { invalidateAdminDashboardCache } from "@/services/contentService";
 
 const DEFAULT_SETTINGS = {
   timezone: "Asia/Kolkata",
@@ -17,7 +18,21 @@ const DEFAULT_SETTINGS = {
   cancellationHours: 2
 };
 
-export async function getSalonScheduleConfig() {
+let salonScheduleCache = null;
+let salonScheduleCacheTime = 0;
+const SALON_SCHEDULE_CACHE_TTL_MS = 60 * 1000;
+
+export function invalidateSalonScheduleCache() {
+  salonScheduleCache = null;
+  salonScheduleCacheTime = 0;
+}
+
+export async function getSalonScheduleConfig({ forceRefresh = false } = {}) {
+  const nowMs = Date.now();
+  if (!forceRefresh && salonScheduleCache && nowMs - salonScheduleCacheTime < SALON_SCHEDULE_CACHE_TTL_MS) {
+    return salonScheduleCache;
+  }
+
   const [settingsRow, businessHours, holidays] = await Promise.all([
     prisma.websiteContent.findUnique({ where: { key: "settings" } }),
     prisma.businessHours.findMany({ orderBy: { weekday: "asc" } }),
@@ -32,7 +47,7 @@ export async function getSalonScheduleConfig() {
       ? settingsRow.value
       : {};
 
-  return {
+  const result = {
     settings: {
       timezone: rawSettings.timezone || DEFAULT_SETTINGS.timezone,
       bookingDays: Number(rawSettings.bookingDays || DEFAULT_SETTINGS.bookingDays),
@@ -43,6 +58,10 @@ export async function getSalonScheduleConfig() {
     businessHours,
     holidays
   };
+
+  salonScheduleCache = result;
+  salonScheduleCacheTime = Date.now();
+  return result;
 }
 
 export async function getAvailableSlotsForDate({ serviceId, date }) {
@@ -328,6 +347,7 @@ export async function createAppointmentBooking(user, rawInput) {
       return appointment;
     });
 
+    invalidateAdminDashboardCache();
     return {
       ...created,
       service: created.service ? serializeService(created.service) : null
@@ -479,6 +499,7 @@ export async function cancelCustomerAppointment(userId, appointmentId) {
     return appt;
   });
 
+  invalidateAdminDashboardCache();
   return {
     ...updated,
     service: updated.service ? serializeService(updated.service) : null
@@ -665,6 +686,7 @@ export async function updateAdminAppointmentStatus(adminId, appointmentId, nextS
     return appt;
   });
 
+  invalidateAdminDashboardCache();
   return {
     ...updated,
     service: updated.service ? serializeService(updated.service) : null

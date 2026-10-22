@@ -5,10 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useLoading } from "@/hooks/useLoading";
 
 export default function AdminLoginPage() {
   const router = useRouter();
   const { setUser, showToast } = useAuth();
+  const { showLoading, hideLoading } = useLoading();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -19,6 +21,11 @@ export default function AdminLoginPage() {
     e.preventDefault();
     setError("");
     setSubmitting(true);
+    showLoading({
+      title: "Verifying Credentials",
+      message: "Authenticating with Aurena security servers...",
+      badge: "Admin Portal"
+    });
 
     try {
       const res = await fetch("/api/auth/admin-login", {
@@ -29,20 +36,27 @@ export default function AdminLoginPage() {
       const data = await res.json();
 
       if (!res.ok) {
+        hideLoading();
         setError(data.error || "Invalid administrator credentials.");
         return;
       }
 
       if (!data.user || data.user.role !== "ADMIN") {
+        hideLoading();
         setError("Administrator access could not be verified.");
         return;
       }
 
       setUser(data.user);
+      showLoading({
+        title: "Access Granted",
+        message: "Welcome back! Redirecting to Studio Dashboard...",
+        badge: "Admin Verified"
+      });
       showToast("Signed in to Aurena Nails Admin Portal.");
-      router.replace("/admin/dashboard");
-      router.refresh();
+      window.location.href = "/admin/dashboard";
     } catch {
+      hideLoading();
       setError("Network error while signing in.");
     } finally {
       setSubmitting(false);

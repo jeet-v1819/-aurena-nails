@@ -70,6 +70,7 @@ function parseArgs(argv) {
     mode: "check",
     verifyLive: false,
     keepSessions: false,
+    force: false,
     help: false
   };
   for (const arg of argv.slice(2)) {
@@ -77,6 +78,7 @@ function parseArgs(argv) {
     else if (arg === "--check") args.mode = "check";
     else if (arg === "--verify-live") args.verifyLive = true;
     else if (arg === "--keep-sessions") args.keepSessions = true;
+    else if (arg === "--force" || arg === "-f") args.force = true;
     else if (arg === "--help" || arg === "-h") args.help = true;
     else throw new Error(`Unknown option: ${arg}`);
   }
@@ -197,9 +199,15 @@ async function main() {
         console.error(`✖ Set CONFIRM_DATABASE_TARGET=${targetLabel} after checking the read-only report. No writes performed.`);
         return 1;
       }
-      if (process.env.NEON_AUTH_BASE_URL &&
-          !process.env.NEON_AUTH_BASE_URL.includes("/api/neon-auth")) {
-        console.error("✖ External Neon Auth endpoint configured; verify that it owns this database before using direct credential reset. No writes performed.");
+      if (
+        !args.force &&
+        process.env.ALLOW_EXTERNAL_AUTH !== "true" &&
+        process.env.NEON_AUTH_BASE_URL &&
+        !process.env.NEON_AUTH_BASE_URL.includes("/api/neon-auth")
+      ) {
+        console.error(
+          "✖ External Neon Auth endpoint configured. To apply credentials directly to this database, add --force (or ALLOW_EXTERNAL_AUTH=true)."
+        );
         return 1;
       }
       const result = await provisionAdmin(prisma, {

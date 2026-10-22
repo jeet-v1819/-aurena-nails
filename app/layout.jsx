@@ -1,8 +1,10 @@
-import React from "react";
+import React, { Suspense } from "react";
 import "./globals.css";
 import { getSessionAndUser } from "@/lib/auth";
 import { getPublicWebsiteContent } from "@/services/contentService";
 import { AuthProvider } from "@/hooks/useAuth";
+import { LoadingProvider } from "@/hooks/useLoading";
+import TopProgressBar from "@/components/ui/TopProgressBar";
 import AppShell from "@/components/layout/AppShell";
 
 export const dynamic = "force-dynamic";
@@ -31,14 +33,19 @@ export default async function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className="min-h-screen flex flex-col bg-aurena-cream text-aurena-charcoal">
-        <AuthProvider initialUser={user}>
-          <AppShell
-            contact={publicData?.contact || {}}
-            businessHours={publicData?.businessHours || []}
-          >
-            {children}
-          </AppShell>
-        </AuthProvider>
+        <LoadingProvider>
+          <AuthProvider initialUser={user}>
+            <Suspense fallback={null}>
+              <TopProgressBar />
+            </Suspense>
+            <AppShell
+              contact={publicData?.contact || {}}
+              businessHours={publicData?.businessHours || []}
+            >
+              {children}
+            </AppShell>
+          </AuthProvider>
+        </LoadingProvider>
       </body>
     </html>
   );

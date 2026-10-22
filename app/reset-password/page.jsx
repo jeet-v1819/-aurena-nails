@@ -4,11 +4,13 @@ import React, { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
+import { useLoading } from "@/hooks/useLoading";
 
 function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { showToast } = useAuth();
+  const { showLoading } = useLoading();
   const token = searchParams?.get("token") || "";
 
   const [password, setPassword] = useState("");
@@ -45,9 +47,14 @@ function ResetPasswordForm() {
           "Your password has been updated. You may now sign in."
       );
       showToast("Password reset successful!", "success");
+      showLoading({
+        title: "Password Updated",
+        message: "Your new password is saved. Redirecting to sign in...",
+        badge: "Security"
+      });
       setTimeout(() => {
-        router.push("/login");
-      }, 1500);
+        window.location.href = "/login";
+      }, 1000);
     } catch {
       setError("Network error. Please try again.");
     } finally {

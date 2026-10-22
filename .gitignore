@@ -13,3 +13,4 @@ public/uploads/
 !.env.example
 *.log
 .DS_Store
+.playwright-mcp/

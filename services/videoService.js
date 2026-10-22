@@ -2,6 +2,17 @@ import { prisma } from "@/lib/prisma";
 import { AppError } from "@/lib/auth";
 import { deleteMediaByPublicId } from "@/lib/cloudinary";
 import { videoSchema } from "@/validators";
+import { invalidateAdminDashboardCache } from "@/services/contentService";
+
+const videosCache = new Map();
+const VIDEOS_CACHE_TTL_MS = 60 * 1000;
+
+export function invalidateVideoCache() {
+  videosCache.clear();
+  try {
+    invalidateAdminDashboardCache();
+  } catch {}
+}
 
 export async function listVideos({
   search = "",
@@ -16,6 +27,15 @@ export async function listVideos({
   const safeLimit = Math.min(50, Math.max(1, Number(limit) || 12));
   const skip = (safePage - 1) * safeLimit;
   const q = String(search || "").trim();
+
+  const isCacheable = !q && !tag;
+  const cacheKey = isCacheable ? `vid:${category}:${featuredOnly}:${activeOnly}:${safePage}:${safeLimit}` : null;
+  if (cacheKey) {
+    const cached = videosCache.get(cacheKey);
+    if (cached && Date.now() - cached.time < VIDEOS_CACHE_TTL_MS) {
+      return cached.data;
+    }
+  }
 
   const where = {
     ...(activeOnly ? { active: true } : {}),
@@ -56,13 +76,19 @@ export async function listVideos({
     prisma.video.count({ where })
   ]);
 
-  return {
+  const result = {
     items,
     total,
     page: safePage,
     limit: safeLimit,
     totalPages: Math.max(1, Math.ceil(total / safeLimit))
   };
+
+  if (cacheKey) {
+    videosCache.set(cacheKey, { time: Date.now(), data: result });
+  }
+
+  return result;
 }
 
 export async function getVideoById(id) {
@@ -122,6 +148,7 @@ export async function createVideo(adminId, rawInput) {
       }
     });
 
+    invalidateVideoCache();
     return video;
   });
 }
@@ -181,6 +208,7 @@ export async function updateVideo(adminId, id, rawInput) {
     return video;
   });
 
+  invalidateVideoCache();
   if (oldPublicId) {
     await deleteMediaByPublicId(oldPublicId, "video").catch(() => {});
   }
@@ -205,6 +233,7 @@ export async function deleteVideo(adminId, id) {
     });
   });
 
+  invalidateVideoCache();
   if (existing.publicId) {
     await deleteMediaByPublicId(existing.publicId, "video").catch(() => {});
   }

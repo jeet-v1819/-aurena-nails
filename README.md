@@ -14,7 +14,7 @@ administrator management portal.
 npm install --legacy-peer-deps
 cp .env.example .env.local     # then fill in the placeholders
 node scripts/prisma-generate.js
-# On a NEW EMPTY local database only; never run this baseline on production.
+# On a NEW EMPTY database only; never run this baseline on production.
 npm run db:deploy
 npm run db:seed
 npm run dev

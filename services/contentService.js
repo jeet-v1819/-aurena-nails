@@ -65,7 +65,34 @@ async function loadPublicSection(label, query, fallbackValue, allowFallback) {
   }
 }
 
-export async function getPublicWebsiteContent({ allowFallback = false } = {}) {
+let publicContentCache = null;
+let publicContentCacheTime = 0;
+const PUBLIC_CONTENT_CACHE_TTL_MS = 60 * 1000;
+
+let adminDashboardCache = null;
+let adminDashboardCacheTime = 0;
+const ADMIN_DASHBOARD_CACHE_TTL_MS = 20 * 1000; // 20-second cache
+
+export function invalidatePublicContentCache() {
+  publicContentCache = null;
+  publicContentCacheTime = 0;
+  try {
+    const { invalidateSalonScheduleCache } = require("@/services/appointmentService");
+    invalidateSalonScheduleCache?.();
+  } catch {}
+}
+
+export function invalidateAdminDashboardCache() {
+  adminDashboardCache = null;
+  adminDashboardCacheTime = 0;
+}
+
+export async function getPublicWebsiteContent({ allowFallback = false, forceRefresh = false } = {}) {
+  const now = Date.now();
+  if (!forceRefresh && publicContentCache && now - publicContentCacheTime < PUBLIC_CONTENT_CACHE_TTL_MS) {
+    return publicContentCache;
+  }
+
   const [rows, businessHours, holidays] = await Promise.all([
     loadPublicSection(
       "website content",
@@ -92,7 +119,7 @@ export async function getPublicWebsiteContent({ allowFallback = false } = {}) {
     map[row.key] = row.value || {};
   }
 
-  return {
+  const result = {
     home: {
       ...DEFAULT_WEBSITE_CONTENT.home,
       ...(map.home || {}),
@@ -134,6 +161,10 @@ export async function getPublicWebsiteContent({ allowFallback = false } = {}) {
     businessHours,
     holidays
   };
+
+  publicContentCache = result;
+  publicContentCacheTime = Date.now();
+  return result;
 }
 
 export async function updateWebsiteContentSection(adminId, key, value) {
@@ -168,6 +199,7 @@ export async function updateWebsiteContentSection(adminId, key, value) {
       }
     });
 
+    invalidatePublicContentCache();
     return row;
   });
 }
@@ -216,6 +248,7 @@ export async function updateBusinessHours(adminId, hoursArray) {
     });
   });
 
+  invalidatePublicContentCache();
   return prisma.businessHours.findMany({ orderBy: { weekday: "asc" } });
 }
 
@@ -246,6 +279,7 @@ export async function createHoliday(adminId, rawInput) {
       }
     });
 
+    invalidatePublicContentCache();
     return holiday;
   });
 }
@@ -275,6 +309,7 @@ export async function updateHoliday(adminId, id, rawInput) {
         targetId: id
       }
     });
+    invalidatePublicContentCache();
     return updated;
   });
 }
@@ -296,6 +331,7 @@ export async function deleteHoliday(adminId, id) {
     });
   });
 
+  invalidatePublicContentCache();
   return { deleted: true };
 }
 
@@ -314,7 +350,7 @@ export async function createContactMessage(rawInput, ipKey = "anon") {
 
   const parsed = contactMessageSchema.parse(rawInput);
 
-  return prisma.contactMessage.create({
+  const res = await prisma.contactMessage.create({
     data: {
       name: parsed.name,
       email: parsed.email,
@@ -324,6 +360,8 @@ export async function createContactMessage(rawInput, ipKey = "anon") {
       read: false
     }
   });
+  invalidateAdminDashboardCache();
+  return res;
 }
 
 export async function listAdminMessages({
@@ -392,6 +430,7 @@ export async function markAdminMessageRead(adminId, id, read = true) {
         targetId: id
       }
     });
+    invalidateAdminDashboardCache();
     return msg;
   });
 }
@@ -413,66 +452,77 @@ export async function deleteAdminMessage(adminId, id) {
     });
   });
 
+  invalidateAdminDashboardCache();
   return { deleted: true };
 }
 
-export async function getAdminDashboardAnalytics() {
-  const [
-    totalCustomers,
-    activeCustomers,
-    inactiveCustomers,
-    totalServices,
-    activeServices,
-    galleryImages,
-    videos,
-    totalAppointments,
-    pendingAppointments,
-    confirmedAppointments,
-    completedAppointments,
-    cancelledAppointments,
-    rejectedAppointments,
-    reviewsCount,
-    unreadMessages,
-    recentAppointments,
-    customersLast6Months,
-    popularServiceGroups
-  ] = await Promise.all([
-    prisma.user.count({ where: { role: "CUSTOMER", deletedAt: null } }),
-    prisma.user.count({ where: { role: "CUSTOMER", active: true, deletedAt: null } }),
-    prisma.user.count({ where: { role: "CUSTOMER", active: false, deletedAt: null } }),
-    prisma.service.count(),
-    prisma.service.count({ where: { active: true } }),
-    prisma.galleryImage.count(),
-    prisma.video.count(),
-    prisma.appointment.count(),
-    prisma.appointment.count({ where: { status: "PENDING" } }),
-    prisma.appointment.count({ where: { status: "CONFIRMED" } }),
-    prisma.appointment.count({ where: { status: "COMPLETED" } }),
-    prisma.appointment.count({ where: { status: "CANCELLED" } }),
-    prisma.appointment.count({ where: { status: "REJECTED" } }),
-    prisma.review.count(),
-    prisma.contactMessage.count({ where: { read: false } }),
-    prisma.appointment.findMany({
-      select: { start: true, status: true, serviceName: true },
-      orderBy: { start: "desc" },
-      take: 500
-    }),
-    prisma.user.findMany({
-      where: { role: "CUSTOMER", deletedAt: null },
-      select: { createdAt: true },
-      orderBy: { createdAt: "desc" },
-      take: 500
-    }),
-    prisma.appointment.groupBy({
-      by: ["serviceName"],
-      _count: { serviceName: true },
-      orderBy: { _count: { serviceName: "desc" } },
-      take: 6
-    })
+export async function getAdminDashboardAnalytics({ forceRefresh = false } = {}) {
+  const nowMs = Date.now();
+  if (!forceRefresh && adminDashboardCache && nowMs - adminDashboardCacheTime < ADMIN_DASHBOARD_CACHE_TTL_MS) {
+    return adminDashboardCache;
+  }
+
+  const now = new Date();
+  const sixMonthsAgo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5, 1));
+
+  const [countsRows, apptMonthly, userMonthly, popularServices] = await Promise.all([
+    prisma.$queryRaw`
+      SELECT
+        (SELECT COUNT(*) FROM "User" WHERE role = 'CUSTOMER'::"Role" AND "deletedAt" IS NULL)::int AS "totalCustomers",
+        (SELECT COUNT(*) FROM "User" WHERE role = 'CUSTOMER'::"Role" AND "deletedAt" IS NULL AND active = true)::int AS "activeCustomers",
+        (SELECT COUNT(*) FROM "User" WHERE role = 'CUSTOMER'::"Role" AND "deletedAt" IS NULL AND active = false)::int AS "inactiveCustomers",
+        (SELECT COUNT(*) FROM "Service")::int AS "totalServices",
+        (SELECT COUNT(*) FROM "Service" WHERE active = true)::int AS "activeServices",
+        (SELECT COUNT(*) FROM "GalleryImage")::int AS "galleryImages",
+        (SELECT COUNT(*) FROM "Video")::int AS "videos",
+        (SELECT COUNT(*) FROM "Appointment")::int AS "totalAppointments",
+        (SELECT COUNT(*) FROM "Appointment" WHERE status = 'PENDING'::"AppointmentStatus")::int AS "pendingAppointments",
+        (SELECT COUNT(*) FROM "Appointment" WHERE status = 'CONFIRMED'::"AppointmentStatus")::int AS "confirmedAppointments",
+        (SELECT COUNT(*) FROM "Appointment" WHERE status = 'COMPLETED'::"AppointmentStatus")::int AS "completedAppointments",
+        (SELECT COUNT(*) FROM "Appointment" WHERE status = 'CANCELLED'::"AppointmentStatus")::int AS "cancelledAppointments",
+        (SELECT COUNT(*) FROM "Appointment" WHERE status = 'REJECTED'::"AppointmentStatus")::int AS "rejectedAppointments",
+        (SELECT COUNT(*) FROM "Review")::int AS "reviewsCount",
+        (SELECT COUNT(*) FROM "ContactMessage" WHERE read = false)::int AS "unreadMessages";
+    `,
+    prisma.$queryRaw`
+      SELECT TO_CHAR("start", 'YYYY-MM') AS ym, COUNT(*)::int AS count
+      FROM "Appointment"
+      WHERE "start" >= ${sixMonthsAgo}
+      GROUP BY ym;
+    `,
+    prisma.$queryRaw`
+      SELECT TO_CHAR("createdAt", 'YYYY-MM') AS ym, COUNT(*)::int AS count
+      FROM "User"
+      WHERE role = 'CUSTOMER'::"Role" AND "deletedAt" IS NULL AND "createdAt" >= ${sixMonthsAgo}
+      GROUP BY ym;
+    `,
+    prisma.$queryRaw`
+      SELECT "serviceName" AS name, COUNT(*)::int AS bookings
+      FROM "Appointment"
+      GROUP BY "serviceName"
+      ORDER BY bookings DESC
+      LIMIT 6;
+    `
   ]);
 
+  const c = countsRows?.[0] || {};
+  const totalCustomers = Number(c.totalCustomers || 0);
+  const activeCustomers = Number(c.activeCustomers || 0);
+  const inactiveCustomers = Number(c.inactiveCustomers || 0);
+  const totalServices = Number(c.totalServices || 0);
+  const activeServices = Number(c.activeServices || 0);
+  const galleryImages = Number(c.galleryImages || 0);
+  const videos = Number(c.videos || 0);
+  const totalAppointments = Number(c.totalAppointments || 0);
+  const pendingAppointments = Number(c.pendingAppointments || 0);
+  const confirmedAppointments = Number(c.confirmedAppointments || 0);
+  const completedAppointments = Number(c.completedAppointments || 0);
+  const cancelledAppointments = Number(c.cancelledAppointments || 0);
+  const rejectedAppointments = Number(c.rejectedAppointments || 0);
+  const reviewsCount = Number(c.reviewsCount || 0);
+  const unreadMessages = Number(c.unreadMessages || 0);
+
   // Build 6-month buckets up to current month
-  const now = new Date();
   const months = [];
   for (let i = 5; i >= 0; i--) {
     const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
@@ -487,26 +537,17 @@ export async function getAdminDashboardAnalytics() {
 
   const monthMap = new Map(months.map((m) => [m.key, m]));
 
-  for (const appt of recentAppointments) {
-    const d = new Date(appt.start);
-    const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-    if (monthMap.has(key)) {
-      monthMap.get(key).appointments += 1;
+  for (const row of (apptMonthly || [])) {
+    if (monthMap.has(row.ym)) {
+      monthMap.get(row.ym).appointments = Number(row.count) || 0;
     }
   }
 
-  for (const cust of customersLast6Months) {
-    const d = new Date(cust.createdAt);
-    const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-    if (monthMap.has(key)) {
-      monthMap.get(key).newCustomers += 1;
+  for (const row of (userMonthly || [])) {
+    if (monthMap.has(row.ym)) {
+      monthMap.get(row.ym).newCustomers = Number(row.count) || 0;
     }
   }
-
-  const popularServices = popularServiceGroups.map((g) => ({
-    name: g.serviceName,
-    bookings: g._count.serviceName
-  }));
 
   const statusDistribution = [
     { status: "PENDING", count: pendingAppointments },
@@ -516,7 +557,7 @@ export async function getAdminDashboardAnalytics() {
     { status: "REJECTED", count: rejectedAppointments }
   ];
 
-  return {
+  const result = {
     stats: {
       totalCustomers,
       activeCustomers,
@@ -536,8 +577,15 @@ export async function getAdminDashboardAnalytics() {
     },
     charts: {
       monthlySeries: months,
-      popularServices,
+      popularServices: (popularServices || []).map((p) => ({
+        name: p.name,
+        bookings: Number(p.bookings) || 0
+      })),
       statusDistribution
     }
   };
+
+  adminDashboardCache = result;
+  adminDashboardCacheTime = Date.now();
+  return result;
 }

@@ -9,13 +9,15 @@ import React, {
   useState
 } from "react";
 import { useRouter } from "next/navigation";
+import { useLoading } from "@/hooks/useLoading";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ initialUser = null, children }) {
   const router = useRouter();
+  const { showLoading, hideLoading } = useLoading();
   const [user, setUserState] = useState(initialUser);
-  const [loading, setLoading] = useState(!initialUser);
+  const [loading, setLoading] = useState(initialUser === undefined);
   const [inactiveMessage, setInactiveMessage] = useState("");
   const [wishlistItems, setWishlistItems] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -107,10 +109,12 @@ export function AuthProvider({ initialUser = null, children }) {
   }, [refreshUserExtras]);
 
   useEffect(() => {
-    if (initialUser) {
+    if (initialUser !== undefined) {
       setUserState(initialUser);
       setLoading(false);
-      refreshUserExtras(initialUser);
+      if (initialUser) {
+        refreshUserExtras(initialUser);
+      }
       didInitialCheck.current = true;
     } else if (!didInitialCheck.current) {
       didInitialCheck.current = true;
@@ -120,6 +124,11 @@ export function AuthProvider({ initialUser = null, children }) {
 
   const logout = useCallback(async () => {
     setLoading(true);
+    showLoading({
+      title: "Signing Out",
+      message: "Closing your session securely and returning home...",
+      badge: "Session"
+    });
     try {
       await fetch("/api/auth/logout", {
         method: "POST",
@@ -130,12 +139,12 @@ export function AuthProvider({ initialUser = null, children }) {
       setWishlistItems([]);
       setUnreadCount(0);
       showToast("You have been signed out.", "info");
-      router.push("/");
-      router.refresh();
-    } finally {
+      window.location.href = "/";
+    } catch {
+      hideLoading();
       setLoading(false);
     }
-  }, [router, showToast]);
+  }, [showLoading, hideLoading, showToast]);
 
   const isServiceWishlisted = useCallback(
     (serviceId) => wishlistItems.some((item) => item.serviceId === serviceId),

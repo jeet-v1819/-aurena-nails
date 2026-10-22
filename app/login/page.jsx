@@ -5,11 +5,13 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useLoading } from "@/hooks/useLoading";
 
 function LoginFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { setUser, showToast } = useAuth();
+  const { showLoading, hideLoading } = useLoading();
 
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -22,6 +24,11 @@ function LoginFormContent() {
     e.preventDefault();
     setError("");
     setSubmitting(true);
+    showLoading({
+      title: "Signing You In",
+      message: "Verifying your details with Aurena studio...",
+      badge: "Client Portal"
+    });
 
     try {
       const res = await fetch("/api/auth/login", {
@@ -33,12 +40,14 @@ function LoginFormContent() {
 
       const data = await res.json();
       if (!res.ok) {
+        hideLoading();
         setError(data.error || "Invalid email/mobile number or password.");
         return;
       }
 
       const loggedInUser = data.user || data.data?.user || null;
       if (!loggedInUser) {
+        hideLoading();
         setError("Sign-in did not establish a valid session. Please try again.");
         return;
       }
@@ -53,9 +62,17 @@ function LoginFormContent() {
         destination = "/admin/dashboard";
       }
 
-      router.replace(destination);
-      router.refresh();
+      showLoading({
+        title: "Welcome Back",
+        message: destination === "/admin/dashboard"
+          ? "Redirecting to Studio Control Center..."
+          : "Redirecting to your bespoke profile...",
+        badge: "Sign In Successful"
+      });
+
+      window.location.href = destination;
     } catch {
+      hideLoading();
       setError("Network error while signing in.");
     } finally {
       setSubmitting(false);

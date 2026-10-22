@@ -2,6 +2,17 @@ import { prisma, serializeService } from "@/lib/prisma";
 import { AppError } from "@/lib/auth";
 import { serviceSchema } from "@/validators";
 import { slugify } from "@/utils/format";
+import { invalidateAdminDashboardCache } from "@/services/contentService";
+
+const publicServicesCache = new Map();
+const PUBLIC_SERVICES_CACHE_TTL_MS = 60 * 1000;
+
+export function invalidateServiceCache() {
+  publicServicesCache.clear();
+  try {
+    invalidateAdminDashboardCache();
+  } catch {}
+}
 
 async function attachRatingsToServices(services) {
   if (!services || services.length === 0) return [];
@@ -51,6 +62,15 @@ export async function listPublicServices({
   const safeLimit = Math.min(50, Math.max(1, Number(limit) || 20));
   const skip = (safePage - 1) * safeLimit;
   const q = String(search || "").trim();
+
+  const isCacheable = !q && !style && !occasion && Number(maxDuration) <= 0;
+  const cacheKey = isCacheable ? `pub:${category}:${availableOnly}:${featuredOnly}:${safePage}:${safeLimit}` : null;
+  if (cacheKey) {
+    const cached = publicServicesCache.get(cacheKey);
+    if (cached && Date.now() - cached.time < PUBLIC_SERVICES_CACHE_TTL_MS) {
+      return cached.data;
+    }
+  }
 
   const where = {
     active: true,
@@ -109,13 +129,19 @@ export async function listPublicServices({
 
   const items = await attachRatingsToServices(rows);
 
-  return {
+  const result = {
     items,
     total,
     page: safePage,
     limit: safeLimit,
     totalPages: Math.max(1, Math.ceil(total / safeLimit))
   };
+
+  if (cacheKey) {
+    publicServicesCache.set(cacheKey, { time: Date.now(), data: result });
+  }
+
+  return result;
 }
 
 export async function getServiceBySlug(slug) {
@@ -316,6 +342,7 @@ export async function createAdminService(adminId, rawInput) {
     });
   });
 
+  invalidateServiceCache();
   return serializeService(created);
 }
 
@@ -443,6 +470,7 @@ export async function updateAdminService(adminId, serviceId, rawInput) {
     });
   });
 
+  invalidateServiceCache();
   return serializeService(updated);
 }
 
@@ -476,6 +504,7 @@ export async function deleteOrArchiveAdminService(adminId, serviceId) {
       });
       return s;
     });
+    invalidateServiceCache();
     return {
       deleted: false,
       archived: true,
@@ -496,6 +525,7 @@ export async function deleteOrArchiveAdminService(adminId, serviceId) {
     });
   });
 
+  invalidateServiceCache();
   return {
     deleted: true,
     archived: false,

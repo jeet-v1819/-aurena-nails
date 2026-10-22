@@ -1,7 +1,8 @@
 import { prisma, serializeService } from "@/lib/prisma";
-import { AppError, sanitizeUser } from "@/lib/auth";
+import { AppError, sanitizeUser, clearSessionCache } from "@/lib/auth";
 import { normalizeIndianMobile, profileUpdateSchema } from "@/validators";
 import { createNotificationOnce } from "@/services/notificationService";
+import { invalidateAdminDashboardCache } from "@/services/contentService";
 
 export async function getCustomerProfile(userId) {
   const user = await prisma.user.findUnique({
@@ -70,6 +71,7 @@ export async function updateCustomerProfile(userId, rawInput) {
     return u;
   });
 
+  clearSessionCache();
   return sanitizeUser(updated);
 }
 
@@ -228,6 +230,8 @@ export async function updateAdminCustomer(adminId, customerId, rawInput) {
     return user;
   });
 
+  clearSessionCache();
+  invalidateAdminDashboardCache();
   return sanitizeUser(updated);
 }
 

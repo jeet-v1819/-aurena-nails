@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 // Never replay the repository's fresh baseline onto an existing production DB.
-require('dotenv').config({ path: '.env.local' });
+const path = require('path');
+require('dotenv').config({
+  path: [path.join(process.cwd(), '.env.local'), path.join(process.cwd(), '.env')]
+});
 const { Pool } = require('pg');
 const { execFileSync } = require('child_process');
 
